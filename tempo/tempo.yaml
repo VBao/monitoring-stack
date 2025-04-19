@@ -9,9 +9,6 @@ distributor:
           endpoint: 0.0.0.0:4317
   ring:
     heartbeat_timeout: 1m
-  ingestion_rate_strategy: global
-  ingestion_rate_limit_bytes: 15_000_000  # 15MB/sec
-  ingestion_burst_size_bytes: 30_000_000  # 30MB
 
 storage:
   trace:
