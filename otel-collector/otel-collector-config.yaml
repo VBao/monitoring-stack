@@ -1,0 +1,82 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+  resource:
+    attributes:
+      - key: host.name
+        action: insert
+        value: ${HOSTNAME}
+      - key: service.name
+        action: insert
+        value: "unknown-service"
+      - key: service.namespace
+        action: insert
+        value: "unknown-namespace"
+  # memory_limiter:
+  #   check_interval: 1s
+  #   limit_percentage: 80
+  #   spike_limit_percentage: 25
+
+exporters:
+  otlp:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 5m
+  
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    sending_queue:
+      enabled: true
+      num_consumers: 8
+      queue_size: 5000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 5m
+  debug:
+    verbosity: basic
+  prometheus:
+    endpoint: "0.0.0.0:9999"
+    send_timestamps: true
+    metric_expiration: 180m
+    resource_to_telemetry_conversion:
+      enabled: false
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch, resource]
+      exporters: [otlp, debug]
+    metrics:
+      receivers: [otlp]
+      processors: [batch, resource]
+      exporters: [prometheus, debug]
+    logs:
+      receivers: [otlp]
+      processors: [batch, resource]
+      exporters: [loki, debug]
+  telemetry:
+    logs:
+      level: "info"
+    metrics:
+      level: detailed
+      address: "0.0.0.0:8888"  # Self-monitoring
