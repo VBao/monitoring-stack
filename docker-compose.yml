@@ -7,7 +7,7 @@ services:
       # - "4318:4318" # OTLP HTTP
     volumes:
       - ./otel-collector/otel-collector-config.yaml:/etc/otel-collector-config.yaml
-    command: ["--config", "/etc/otel-collector-config.yaml"]
+    command: [ "--config", "/etc/otel-collector-config.yaml" ]
     networks:
       - monitoring
 
@@ -31,13 +31,7 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus-data:/etc/prometheus
-    command: [
-      "--config.file=/etc/prometheus/prometheus.yml",
-      "--storage.tsdb.path=/prometheus",
-      "--web.console.libraries=/etc/prometheus/console_libraries",
-      "--web.console.templates=/etc/prometheus/consoles",
-      "--web.enable-lifecycle"
-    ]
+    command: [ "--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--web.console.libraries=/etc/prometheus/console_libraries", "--web.console.templates=/etc/prometheus/consoles", "--web.enable-lifecycle" ]
     # depends_on:
     #   - init_prometheus
     networks:
@@ -48,8 +42,15 @@ services:
     hostname: tempo
     volumes:
       - ./tempo/tempo.yaml:/etc/tempo.yaml
-      - tempo-data:/var/tempo 
-    command: ["/tempo", "-config.file=/etc/tempo.yaml"]
+      - tempo-data:/var/tempo
+    command: [ "/tempo", "-config.file=/etc/tempo.yaml" ]
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+          cpus: '0.1'
     networks:
       - monitoring
 
@@ -90,10 +91,10 @@ volumes:
   loki-data:
   prometheus-data:
 
+
 networks:
   monitoring:
     driver: bridge
     ipam:
       config:
         - subnet: 10.0.1.0/24
-  
