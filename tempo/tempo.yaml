@@ -10,14 +10,14 @@ distributor:
         grpc:
           endpoint: 0.0.0.0:4317
           max_recv_msg_size_mib: 4
-          max_concurrent_streams: 50
+          max_concurrent_streams: 50  # Reduced from 100
 
   ring:
     heartbeat_timeout: 1m
 
 ingester:
-  max_block_duration: 10m
-  max_block_bytes: 104857600
+  max_block_duration: 10m    # Complete blocks more frequently
+  max_block_bytes: 104857600 # 100MB block size for better compression
   lifecycler:
     ring:
       replication_factor: 1
@@ -29,15 +29,15 @@ storage:
     local:
       path: /var/tempo/traces
     pool:
-      max_workers: 20
-      queue_depth: 2000
+      max_workers: 20        # Reduced from 100
+      queue_depth: 2000      # Reduced from 10000
     wal:
-      path: /var/tempo/wal
+      path: /var/tempo/wal   # Separate WAL path
 
 compactor:
   compaction:
-    block_retention: 336h
-    compaction_window: 2h
+    block_retention: 336h    # Kept at 14 days as requested
+    compaction_window: 2h    # Increased for more efficient compaction
     max_compaction_objects: 1000000
     compacted_block_retention: 1h
   ring:
@@ -57,5 +57,5 @@ querier:
 overrides:
   defaults:
     metrics_generator:
-      processors: [service-graphs, span-metrics]
+      processors: [service-graphs, span-metrics]  # Removed local-blocks processor
       generate_native_histograms: both

@@ -7,9 +7,23 @@ services:
       # - "4318:4318" # OTLP HTTP
     volumes:
       - ./otel-collector/otel-collector-config.yaml:/etc/otel-collector-config.yaml
-    command: [ "--config", "/etc/otel-collector-config.yaml" ]
+    command: ["--config", "/etc/otel-collector-config.yaml"]
     networks:
       - monitoring
+
+  # Init Prometheus to set permissions
+  # This is needed because the Prometheus image uses a non-root user
+  # and the volume mount for /prometheus needs to be owned by that user
+  # init_prometheus:
+  #   image: prom/prometheus:v3.3.0
+  #   user: root
+  #   entrypoint:
+  #     - /bin/sh
+  #     - -c
+  #     - |
+  #       chown -R 65534:65534 /prometheus
+  #   volumes:
+  #     - ./data/prometheus:/prometheus
 
   prometheus:
     image: prom/prometheus:v3.3.0
@@ -17,7 +31,13 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus-data:/etc/prometheus
-    command: [ "--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--web.console.libraries=/etc/prometheus/console_libraries", "--web.console.templates=/etc/prometheus/consoles", "--web.enable-lifecycle" ]
+    command: [
+      "--config.file=/etc/prometheus/prometheus.yml",
+      "--storage.tsdb.path=/prometheus",
+      "--web.console.libraries=/etc/prometheus/console_libraries",
+      "--web.console.templates=/etc/prometheus/consoles",
+      "--web.enable-lifecycle"
+    ]
     # depends_on:
     #   - init_prometheus
     networks:
@@ -28,20 +48,13 @@ services:
     hostname: tempo
     volumes:
       - ./tempo/tempo.yaml:/etc/tempo.yaml
-      - tempo-data:/var/tempo
-    command: [ "/tempo", "-config.file=/etc/tempo.yaml" ]
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 512M
-          cpus: '0.1'
+      - tempo-data:/var/tempo 
+    command: ["/tempo", "-config.file=/etc/tempo.yaml"]
     networks:
       - monitoring
 
   loki:
-    image: grafana/loki:3.5
+    image: grafana/loki:2.7.0
     hostname: loki
     volumes:
       - ./loki/loki-config.yaml:/etc/loki/local-config.yaml
@@ -53,7 +66,7 @@ services:
       - monitoring
 
   grafana:
-    image: grafana/grafana:12.0.1
+    image: grafana/grafana:latest
     hostname: grafana
     ports:
       - "3000:3000"
@@ -77,10 +90,9 @@ volumes:
   loki-data:
   prometheus-data:
 
-
 networks:
   monitoring:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 10.0.1.0/24
+#    driver: bridge
+#    ipam:
+#      config:
+#        - subnet: 10.0.1.0/24

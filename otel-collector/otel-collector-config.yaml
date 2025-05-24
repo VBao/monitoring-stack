@@ -2,6 +2,7 @@ receivers:
   otlp:
     protocols:
       grpc:
+        endpoint: "0.0.0.0:4317"
       http:
 
 processors:
@@ -24,6 +25,11 @@ processors:
   #   check_interval: 1s
   #   limit_percentage: 80
   #   spike_limit_percentage: 25
+  attributes:
+    actions:
+      - key: http.request.header.authorization
+        action: extract
+        pattern: "^Bearer"
 
 exporters:
   otlp:
