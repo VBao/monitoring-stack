@@ -11,5 +11,4 @@ scrape_configs:
       # - targets: ["srv-captain--otel-collector:9999"]
       - targets: ["otel-collector:9999"]
         labels:
-          env: "prod"
           component: "collector"

@@ -17,7 +17,7 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus-data:/etc/prometheus
-    command: [ "--config.file=/etc/prometheus/prometheus.yml"]
+    command: [ "--config.file=/etc/prometheus/prometheus.yml" ]
     # command: [ "--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--web.console.libraries=/etc/prometheus/console_libraries", "--web.console.templates=/etc/prometheus/consoles", "--web.enable-lifecycle" ]
     # depends_on:
     #   - init_prometheus
@@ -34,10 +34,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 4G
         reservations:
-          memory: 512M
-          cpus: '0.1'
+          memory: 1G
+          cpus: '0.2'
     networks:
       - monitoring
 

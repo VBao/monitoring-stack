@@ -1,89 +1,302 @@
+# OpenTelemetry Collector Configuration for version 0.123.0+
+# This configuration sets up the OTEL Collector to receive telemetry data
+# and export to Tempo (traces), Prometheus (metrics), and Loki (logs)
+
 receivers:
   otlp:
     protocols:
       grpc:
-        endpoint: "0.0.0.0:4317"
+        endpoint: "0.0.0.0:4317" # OTLP gRPC receiver endpoint
+        max_recv_msg_size_mib: 4 # Max message size (4MB)
+        max_concurrent_streams: 50 # Max concurrent gRPC streams
+
+        # Additional gRPC options (commented for future use):
+        # keepalive:
+        #   server_parameters:
+        #     max_connection_idle: 11s       # Close idle connections
+        #     max_connection_age: 12s        # Max connection lifetime
+        #     time: 30s                      # Keepalive ping interval
+        #     timeout: 5s                    # Keepalive ping timeout
+        # compression: gzip                  # Enable gRPC compression
+        # read_buffer_size: 512              # Read buffer size in KB
+        # write_buffer_size: 512             # Write buffer size in KB
+
       http:
-        endpoint: "0.0.0.0:4318"
+        endpoint: "0.0.0.0:4318" # OTLP HTTP receiver endpoint
+
+        # Additional HTTP options (commented for future use):
+        # max_request_body_size: 4194304     # Max HTTP request body size (4MB)
+        # include_metadata: true             # Include HTTP metadata in telemetry
+        # cors:
+        #   allowed_origins: ["*"]           # CORS origins for browser traces
+        #   allowed_headers: ["*"]           # Allowed CORS headers
+        #   max_age: 7200                    # CORS preflight cache duration
+
+  # Additional receivers (commented for future use):
+  # jaeger:                                 # Jaeger protocol support
+  #   protocols:
+  #     grpc:
+  #       endpoint: "0.0.0.0:14250"
+  #     thrift_http:
+  #       endpoint: "0.0.0.0:14268"
+  #     thrift_compact:
+  #       endpoint: "0.0.0.0:6831"
+
+  # zipkin:                                 # Zipkin protocol support
+  #   endpoint: "0.0.0.0:9411"
+
+  # prometheus:                             # Prometheus scraper (for pulling metrics)
+  #   config:
+  #     scrape_configs:
+  #       - job_name: 'otel-collector'
+  #         scrape_interval: 15s
+  #         static_configs:
+  #           - targets: ['localhost:8888']
+
+  # hostmetrics:                            # Host metrics collection
+  #   collection_interval: 30s
+  #   scrapers:
+  #     cpu:
+  #       metrics:
+  #         system.cpu.utilization:
+  #           enabled: true
+  #     memory: {}
+  #     disk: {}
+  #     network: {}
+  #     processes: {}
 
 processors:
+  # Batch processor - groups telemetry data for efficient export
   batch:
-    timeout: 1s
-    send_batch_size: 1024
-    send_batch_max_size: 2048
+    timeout: 1s # Max time to wait before sending batch
+    send_batch_size: 1024 # Batch size for normal conditions
+    send_batch_max_size: 2048 # Max batch size under high load
+
+    # Additional batch options (commented for future use):
+    # metadata_keys: []                     # Metadata keys to batch by
+    # metadata_cardinality_limit: 1000     # Max unique metadata combinations
+
+  # Resource processor - manages resource attributes across all telemetry
   resource:
     attributes:
+      # Core service identification attributes
       - key: host.name
-        action: insert
-        value: ${HOSTNAME}
+        action: upsert # Add or update host.name
+        from_attribute: host.name
       - key: service.name
-        action: insert
-        value: "unknown-service"
+        action: upsert # Add or update service.name
+        from_attribute: service.name
       - key: service.namespace
-        action: insert
-        value: "unknown-namespace"
-  # memory_limiter:
-  #   check_interval: 1s
-  #   limit_percentage: 80
-  #   spike_limit_percentage: 25
+        action: upsert # Add or update service.namespace
+        from_attribute: service.namespace
+      - key: service.instance.id
+        action: upsert # Add or update service.instance.id
+        from_attribute: service.instance.id
+      - key: application.environment
+        action: upsert # Add or update application.environment
+        from_attribute: application.environment
+
+      # Additional resource attributes (commented for future use):
+      # - key: service.version              # Service version information
+      #   action: upsert
+      #   value: "${SERVICE_VERSION}"
+      # - key: deployment.environment       # Deployment environment
+      #   action: upsert
+      #   from_attribute: deployment.environment
+      # - key: cloud.provider               # Cloud provider information
+      #   action: insert
+      #   value: "aws"                      # or "gcp", "azure", etc.
+
+  # Attributes processor - manages span/metric/log attributes
   attributes:
     actions:
+      # Security: Remove sensitive headers
       - key: http.request.header.authorization
-        action: extract
-        pattern: "^Bearer"
+        action: delete # Remove authorization headers from traces
+
+      # Standardize attribute names
+      - key: application.environment
+        action: upsert # Ensure consistent environment attribute
+        from_attribute: application.environment
+      - key: service.namespace
+        action: upsert # Ensure consistent namespace attribute
+        from_attribute: service.namespace
+
+      # Additional attribute actions (commented for future use):
+      # - key: http.request.header.cookie   # Remove sensitive cookie data
+      #   action: delete
+      # - key: user.id                      # Hash user IDs for privacy
+      #   action: hash
+      # - key: http.url                     # Extract path from full URL
+      #   action: extract
+      #   pattern: ^https?://[^/]+(/[^?]*)
+      #   group: 1
+      # - key: custom.tenant_id             # Add custom tenant identification
+      #   action: insert
+      #   value: "${TENANT_ID}"
+
+  # Additional processors (commented for future use):
+  # memory_limiter:                        # Prevent OOM by limiting memory usage
+  #   limit_mib: 512                       # Memory limit in MiB
+  #   spike_limit_mib: 128                 # Spike limit in MiB
+  #   check_interval: 5s                   # Check interval
+
+  # probabilistic_sampler:                 # Sample traces to reduce volume
+  #   sampling_percentage: 10              # Sample 10% of traces
+  #   hash_seed: 22                        # Seed for consistent sampling
+
+  # span:                                  # Span processor for trace modifications
+  #   name:
+  #     to_attributes:
+  #       rules:
+  #         - pattern: ^(.*)$              # Extract operation name
+  #           name_template: "${1}"
+
+  # filter:                                # Filter telemetry data
+  #   traces:
+  #     span:
+  #       - 'attributes["http.status_code"] == 200'  # Filter successful requests
+  #   metrics:
+  #     metric:
+  #       - 'name == "system.cpu.utilization"'       # Filter specific metrics
 
 exporters:
+  # Tempo exporter - for distributed tracing
   otlp:
-    endpoint: tempo:4317
+    endpoint: tempo:4317 # Tempo gRPC endpoint
     tls:
-      insecure: true
+      insecure: true # Disable TLS for internal communication
     sending_queue:
-      enabled: true
-      num_consumers: 10
-      queue_size: 1000
+      enabled: true # Enable sending queue for reliability
+      num_consumers: 10 # Number of queue consumers
+      queue_size: 1000 # Queue size for buffering
     retry_on_failure:
-      enabled: true
-      initial_interval: 5s
-      max_interval: 30s
-      max_elapsed_time: 5m
+      enabled: true # Enable retry on export failure
+      initial_interval: 5s # Initial retry delay
+      max_interval: 30s # Max retry delay
+      max_elapsed_time: 5m # Max total retry time
 
+    # Additional OTLP options (commented for future use):
+    # compression: gzip                     # Enable compression
+    # timeout: 10s                         # Export timeout
+    # headers:
+    #   X-Scope-OrgID: "tenant1"           # Multi-tenancy headers
+    # balancer_name: "round_robin"         # Load balancing strategy
+
+  # Loki exporter - for log aggregation
   loki:
-    endpoint: http://loki:3100/loki/api/v1/push
+    endpoint: http://loki:3100/loki/api/v1/push # Loki push endpoint
+    default_labels_enabled:
+      exporter: false # Don't add exporter label
+      job: true # Add job label
     sending_queue:
-      enabled: true
-      num_consumers: 8
-      queue_size: 5000
+      enabled: true # Enable sending queue
+      num_consumers: 8 # Number of queue consumers
+      queue_size: 5000 # Queue size for log buffering
     retry_on_failure:
-      enabled: true
-      initial_interval: 5s
-      max_interval: 30s
-      max_elapsed_time: 5m
-  debug:
-    verbosity: basic
-  prometheus:
-    endpoint: "0.0.0.0:9999"
-    send_timestamps: true
-    metric_expiration: 180m
-    resource_to_telemetry_conversion:
-      enabled: false
+      enabled: true # Enable retry on failure
+      initial_interval: 5s # Initial retry delay
+      max_interval: 30s # Max retry delay
+      max_elapsed_time: 5m # Max total retry time
 
+    # Additional Loki options (commented for future use):
+    # tenant_id: "tenant1"                 # Multi-tenant ID
+    # headers:
+    #   X-Scope-OrgID: "tenant1"           # Multi-tenancy headers
+    # format: json                         # Log format (json or logfmt)
+    # labels:
+    #   attributes:
+    #     level: "severity_text"            # Map log level attribute
+    #     service: "service_name"           # Map service name
+
+  # Prometheus exporter - for metrics collection
+  prometheus:
+    endpoint: "0.0.0.0:9999" # Prometheus scrape endpoint
+    send_timestamps: true # Include timestamps in metrics
+    metric_expiration: 180m # Metric expiration time (3 hours)
+    resource_to_telemetry_conversion:
+      enabled: true # Convert resource attributes to labels
+    add_metric_suffixes: true # Add metric type suffixes
+
+    # Additional Prometheus options (commented for future use):
+    # namespace: "otel"                    # Metric namespace prefix
+    # const_labels:
+    #   cluster: "production"              # Constant labels for all metrics
+    # enable_open_metrics: true            # Enable OpenMetrics format
+    # histogram_accumulation: cumulative   # Histogram accumulation mode
+
+  # Additional exporters (commented for future use):
+  # jaeger:                               # Jaeger exporter for traces
+  #   endpoint: jaeger:14250
+  #   tls:
+  #     insecure: true
+
+  # zipkin:                               # Zipkin exporter for traces
+  #   endpoint: http://zipkin:9411/api/v2/spans
+  #   format: json                        # Export format
+
+  # elasticsearch:                        # Elasticsearch for logs/traces
+  #   endpoints: ["http://elasticsearch:9200"]
+  #   index: "otel-logs"
+  #   pipeline: "otel-pipeline"
+
+  # kafka:                                # Kafka for streaming telemetry
+  #   brokers: ["kafka:9092"]
+  #   topic: "otel-traces"
+  #   encoding: otlp_proto
+
+  # file:                                 # File export for debugging
+  #   path: /tmp/otel-output.json
+  #   format: json
+
+# Service configuration - defines telemetry pipelines
 service:
+  # Pipeline definitions for different telemetry types
   pipelines:
     traces:
-      receivers: [otlp]
-      processors: [batch, resource]
-      exporters: [otlp, debug]
+      receivers: [otlp] # Receive traces via OTLP
+      processors: [batch, resource, attributes] # Process traces through pipeline
+      exporters: [otlp] # Export traces to Tempo
+
     metrics:
-      receivers: [otlp]
-      processors: [batch, resource]
-      exporters: [prometheus, debug]
+      receivers: [otlp] # Receive metrics via OTLP
+      processors: [batch, resource, attributes] # Process metrics through pipeline
+      exporters: [prometheus] # Export metrics to Prometheus
+
     logs:
-      receivers: [otlp]
-      processors: [batch, resource]
-      exporters: [loki, debug]
-  telemetry:
-    logs:
-      level: "info"
-    metrics:
-      level: detailed
-      address: "0.0.0.0:8888" # Self-monitoring
+      receivers: [otlp] # Receive logs via OTLP
+      processors: [batch, resource, attributes] # Process logs through pipeline
+      exporters: [loki] # Export logs to Loki
+
+
+  # Additional service options (commented for future use):
+  # telemetry:                            # Internal telemetry configuration
+  #   logs:
+  #     level: info                       # Log level for collector itself
+  #     development: false                # Development mode logging
+  #     encoding: console                 # Log encoding (console or json)
+  #     disable_caller: false             # Disable caller information
+  #     disable_stacktrace: false         # Disable stack traces
+  #     output_paths: ["stderr"]          # Log output paths
+  #     error_output_paths: ["stderr"]    # Error log output paths
+  #   metrics:
+  #     level: detailed                   # Metrics detail level
+  #     address: "0.0.0.0:8888"          # Metrics endpoint
+  #   resource:
+  #     service.name: "otelcol-contrib"   # Service name for collector metrics
+  #     service.version: "0.123.0"       # Service version
+
+  # extensions:                           # Extensions for additional functionality
+  #   - health_check                      # Health check extension
+  #   - pprof                            # Performance profiling
+  #   - zpages                           # Debug pages
+# Extensions configuration (commented for future use):
+# extensions:
+#   health_check:                         # Health check endpoint
+#     endpoint: "0.0.0.0:13133"
+#   pprof:                               # Performance profiling
+#     endpoint: "0.0.0.0:1777"
+#   zpages:                              # Debug zpages
+#     endpoint: "0.0.0.0:55679"
+#   memory_ballast:                      # Memory ballast for GC optimization
+#     size_mib: 165                      # Ballast size in MiB

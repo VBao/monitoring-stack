@@ -8,10 +8,61 @@ datasources:
         enabled: true
       tracesToLogs:
         datasourceUid: "Loki"
-        tags: ["service.name", "job", "instance", "level"]
-        mappedTags: [{ key: "service.name", value: "service" }]
-        mapTagNamesEnabled: false
+        tags:
+          - "service.name"
+          - "service.namespace"
+          - "application.environment"
+          - "service.instance.id"
+        mappedTags:
+          - key: "service.name"
+            value: "service_name"
+          - key: "service.namespace"
+            value: "service_namespace"
+          - key: "application.environment"
+            value: "environment"
+        mapTagNamesEnabled: true
         spanStartTimeShift: "-1m"
         spanEndTimeShift: "1m"
         filterByTraceID: true
         filterBySpanID: false
+        lokiSearch: true
+      tracesToMetrics:
+        datasourceUid: "Prometheus"
+        tags:
+          - key: "service.name"
+            value: "service_name"
+          - key: "service.namespace"
+            value: "service_namespace"
+          - key: "application.environment"
+            value: "application_environment"
+          - key: "service.instance.id"
+            value: "service_instance_id"
+        queries:
+          - name: "Request Rate"
+            query: 'rate(http_server_requests_seconds_count{service_name="$${__tags.service_name}", service_namespace="$${__tags.service_namespace}"}[5m])'
+          - name: "Request Duration P95"
+            query: 'histogram_quantile(0.95, rate(http_server_requests_seconds_bucket{service_name="$${__tags.service_name}", service_namespace="$${__tags.service_namespace}"}[5m]))'
+          - name: "Error Rate"
+            query: 'rate(http_server_requests_seconds_count{service_name="$${__tags.service_name}", service_namespace="$${__tags.service_namespace}", status=~"5.."}[5m])'
+          - name: "JVM Memory Used"
+            query: 'jvm_memory_used_bytes{service_name="$${__tags.service_name}", service_namespace="$${__tags.service_namespace}"}'
+        spanStartTimeShift: "-1m"
+        spanEndTimeShift: "1m"
+      tracesToProfiles:
+        datasourceUid: "Pyroscope"
+        tags:
+          - key: "service.name"
+            value: "service_name"
+          - key: "service.namespace"
+            value: "service_namespace"
+          - key: "application.environment"
+            value: "environment"
+        profileTypeId: "process_cpu:cpu:nanoseconds:cpu:nanoseconds"
+        query: 'process_cpu:cpu:nanoseconds:cpu:nanoseconds{service_name="$${__tags.service_name}", service_namespace="$${__tags.service_namespace}"}'
+        customQuery: true
+        spanStartTimeShift: "-1m"
+        spanEndTimeShift: "1m"
+      search:
+        hide: false
+      serviceMap:
+        datasourceUid: "Prometheus"

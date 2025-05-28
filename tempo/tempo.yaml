@@ -1,61 +1,259 @@
+# Tempo Configuration for version 2.7.2+
+# This configuration sets up Tempo for distributed tracing with metrics generation
+# and optimized for production workloads with extended query capabilities
+
 server:
+  # HTTP API endpoint for queries and health checks
   http_listen_port: 3200
-  grpc_server_max_recv_msg_size: 4194304
-  grpc_server_max_send_msg_size: 4194304
+  # gRPC message size limits for trace ingestion
+  grpc_server_max_recv_msg_size: 4194304 # 4MB - increase for large traces
+  grpc_server_max_send_msg_size: 4194304 # 4MB - increase for large trace responses
+
+  # Additional server options (commented for future use):
+  # log_level: info                        # Set log verbosity (debug, info, warn, error)
+  # log_format: logfmt                     # Log format (logfmt or json)
+  # grpc_listen_port: 9095                 # Separate gRPC port if needed
+  # http_server_read_timeout: 30s          # HTTP read timeout
+  # http_server_write_timeout: 30s         # HTTP write timeout
 
 distributor:
   receivers:
     otlp:
       protocols:
         grpc:
-          endpoint: 0.0.0.0:4317
-          max_recv_msg_size_mib: 4
-          max_concurrent_streams: 50 # Reduced from 100
+          endpoint: 0.0.0.0:4317 # OTLP gRPC receiver endpoint
+          max_recv_msg_size_mib: 4 # Max message size in MiB
+          max_concurrent_streams: 50 # Max concurrent gRPC streams
+
+          # Additional OTLP options (commented for future use):
+          # keepalive:
+          #   server_parameters:
+          #     max_connection_idle: 11s     # Close idle connections
+          #     max_connection_age: 12s      # Max connection lifetime
+          #     time: 30s                    # Keepalive ping interval
+          #     timeout: 5s                  # Keepalive ping timeout
+
+        # HTTP receiver (commented, add if HTTP ingestion needed):
+        # http:
+        #   endpoint: 0.0.0.0:4318           # OTLP HTTP receiver endpoint
+        #   cors:
+        #     allowed_origins: ["*"]         # CORS origins for browser traces
+
+    # Additional receivers (commented for future use):
+    # jaeger:                                # Jaeger protocol support
+    #   protocols:
+    #     grpc:
+    #       endpoint: 0.0.0.0:14250
+    #     thrift_http:
+    #       endpoint: 0.0.0.0:14268
+    # zipkin:                                # Zipkin protocol support
+    #   endpoint: 0.0.0.0:9411
 
   ring:
-    heartbeat_timeout: 1m
+    heartbeat_timeout: 1m # Distributor ring heartbeat timeout
+
+    # Additional ring options (commented for future use):
+    # kvstore:
+    #   store: memberlist                    # Use memberlist for clustering
+    # memberlist:
+    #   join_members: ["tempo-1", "tempo-2"] # Cluster members for HA setup
 
 ingester:
-  max_block_duration: 10m # Complete blocks more frequently
-  max_block_bytes: 104857600 # 100MB block size for better compression
+  # Block configuration - controls when traces are flushed to storage
+  max_block_duration: 10m # Max time before flushing block to storage
+  max_block_bytes: 104857600 # Max block size before flush (50MB)
+  trace_idle_period: 30s # Time to wait before considering trace complete
+
   lifecycler:
     ring:
-      replication_factor: 1
-  trace_idle_period: 30s # Flush traces to storage more frequently
+      replication_factor: 1 # Number of replicas (increase for HA)
+
+      # Additional lifecycler options (commented for future use):
+      # heartbeat_timeout: 1m               # Ring heartbeat timeout
+      # num_tokens: 128                     # Number of tokens in the ring
+      # final_sleep: 0s                     # Sleep before shutdown
+
+  # Additional ingester options (commented for future use):
+  # max_trace_idle: 1m                      # Max time trace can be idle
+  # flush_check_period: 10s                 # How often to check for flushable blocks
+  # concurrent_flushes: 16                  # Max concurrent flush operations
 
 storage:
   trace:
-    backend: local
+    backend: local # Storage backend (local, gcs, s3, azure)
     local:
-      path: /var/tempo/traces
+      path: /var/tempo/traces # Local storage path for traces
     pool:
-      max_workers: 20 # Reduced from 100
-      queue_depth: 2000 # Reduced from 10000
+      max_workers: 20 # Max workers for storage operations
+      queue_depth: 2000 # Queue depth for storage operations
     wal:
-      path: /var/tempo/wal # Separate WAL path
+      path: /var/tempo/wal # Write-ahead log path
+
+      # Additional WAL options (commented for future use):
+      # replay_memory_ceiling: 2GB          # Max memory during WAL replay
+      # v2_encoding: snappy                 # WAL encoding (none, gzip, lz4, snappy, zstd)
+
+    # Cloud storage options (commented for future use):
+    # gcs:                                  # Google Cloud Storage
+    #   bucket_name: tempo-traces
+    #   chunk_buffer_size: 10485760
+    # s3:                                   # AWS S3
+    #   bucket: tempo-traces
+    #   region: us-east-1
+    #   access_key_id: ${AWS_ACCESS_KEY_ID}
+    #   secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+    # azure:                                # Azure Blob Storage
+    #   storage_account_name: tempoaccount
+    #   storage_account_key: ${AZURE_STORAGE_KEY}
+    #   container_name: tempo-traces
 
 compactor:
   compaction:
-    block_retention: 168h # Kept at 7 days as requested
-    compaction_window: 2h # Increased for more efficient compaction
-    max_compaction_objects: 1000000
-    compacted_block_retention: 1h
+    block_retention: 168h # Keep blocks for 7 days
+    compaction_window: 2h # Time window for compaction
+    max_compaction_objects: 1000000 # Max objects per compaction
+    compacted_block_retention: 1h # Keep compacted blocks for 1 hour
   ring:
-    wait_stability_min_duration: 1m
+    wait_stability_min_duration: 1m # Wait time for ring stability
+
+    # Additional compactor options (commented for future use):
+    # compaction_cycle: 30s                 # How often to run compaction
+    # retention_concurrency: 10             # Concurrent retention operations
+    # v2_in_buffer_bytes: 5242880           # Buffer size for v2 blocks
+    # v2_out_buffer_bytes: 20971520         # Output buffer size for v2 blocks
+    # v2_prefetch_traces_count: 1000        # Number of traces to prefetch
 
 metrics_generator:
+  # Registry controls how metrics are collected and stored locally
   registry:
-    collection_interval: 30s
+    collection_interval: 30s # How often to collect metrics
+    stale_duration: 15m # Keep metrics for 15 minutes (extends default 5m)
   storage:
-    path: /tmp/tempo-metrics
+    path: /var/tempo/metrics # Local metrics storage path
+    remote_write_flush_deadline: 1m # Deadline for remote write operations
+  traces_storage:
+    path: /var/tempo/wal # Path for traces used in metrics generation
+
+  # Processors generate different types of metrics from traces
+  processor:
+    span_metrics:
+      # Generate RED metrics (Rate, Errors, Duration) from spans
+      histogram_buckets:
+        [0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
+      enable_target_info: true # Include target_info metric
+
+      # Additional span metrics options (commented for future use):
+      # dimensions: ["http.method", "http.status_code"]  # Additional dimensions to include
+      # intrinsic_dimensions:                             # Default dimensions
+      #   service: true
+      #   span_name: true
+      #   span_kind: true
+      #   status_code: true
+
+    service_graphs:
+      # Generate service dependency graphs and connection metrics
+      histogram_buckets: [0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6.4, 12.8]
+      max_items: 10000 # Max service graph edges to track
+      wait: 10s # Wait time for edge completion
+
+      # Additional service graph options (commented for future use):
+      # dimensions: ["client", "server"]    # Custom dimensions for service graphs
+      # peer_attributes: ["db.name"]        # Additional peer attributes to include
+
+    local_blocks:
+      # Generate metrics from local trace blocks (for queries)
+      max_live_traces: 10000 # Max live traces to track
+      max_block_duration: 30m # Max duration before flushing metrics block
+      max_block_bytes: 104857600 # Max block size (100MB)
+      flush_check_period: 10s # How often to check for flush
+      trace_idle_period: 30s # Idle time before trace completion
+      complete_block_timeout: 5m # Timeout for completing blocks
+
+  # Remote write configuration (commented for future use):
+  # remote_write:
+  #   - url: http://prometheus:9090/api/v1/write    # Prometheus remote write endpoint
+  #     send_exemplars: true                        # Send exemplars with metrics
+  #     headers:
+  #       X-Scope-OrgID: tenant1                    # Multi-tenancy header
+  #     queue_config:
+  #       capacity: 10000                           # Queue capacity
+  #       max_samples_per_send: 2000                # Max samples per batch
 
 querier:
-  max_concurrent_queries: 10
+  max_concurrent_queries: 10 # Max concurrent queries per querier
   frontend_worker:
-    frontend_address: 127.0.0.1:9095
+    frontend_address: 127.0.0.1:9095 # Query frontend address
 
+    # Additional querier options (commented for future use):
+    # query_timeout: 30s                    # Query timeout
+    # max_concurrent_queries: 20            # Override concurrent queries
+    # search_prefer_self: 10                # Prefer local data for searches
+    # trace_by_id_prefer_self: 10           # Prefer local data for trace by ID
+
+query_frontend:
+  max_outstanding_per_tenant: 2000 # Max outstanding queries per tenant
+
+  # Additional query frontend options (commented for future use):
+  # querier_forget_delay: 15m              # Time to remember failed queriers
+  # max_retries: 5                         # Max query retries
+  # retry_delay: 2s                        # Delay between retries
+  # search:
+  #   duration_slo: 5s                     # Search duration SLO
+  #   throughput_bytes_slo: 1.073741824e+09 # Search throughput SLO (1GB)
+  # trace_by_id:
+  #   duration_slo: 5s                     # Trace by ID duration SLO
+
+# Global overrides - apply to all tenants unless per-tenant overrides exist
 overrides:
-  defaults:
-    metrics_generator:
-      processors: [service-graphs, span-metrics, local-blocks]
-      generate_native_histograms: both
+  # Metrics generator configuration
+  metrics_generator_processors: [service-graphs, span-metrics, local-blocks] # Enabled processors
+
+  # Per-tenant limits
+  max_traces_per_user: 5000 # Max active traces per tenant
+  max_global_traces_per_user: 100000 # Max global traces per tenant
+
+  # Ingestion rate limiting
+  ingestion_rate_strategy: global # Rate limiting strategy (local or global)
+  ingestion_rate_limit_bytes: 15000000 # Max ingestion rate (15MB/s)
+  ingestion_burst_size_bytes: 20000000 # Burst size for ingestion (20MB)
+  max_bytes_per_trace: 50000000 # Max trace size (50MB)
+
+  # Query limits
+  max_search_duration: 0s # Max search time range (0s = unlimited)
+
+
+  # Additional overrides (commented for future use):
+  # max_spans_per_trace: 100000           # Max spans per trace
+  # max_bytes_per_tag_values_query: 5000000  # Max bytes for tag values query
+  # max_blocks_per_tag_values_query: 1000    # Max blocks for tag values query
+  # max_search_bytes_per_trace: 5000000      # Max bytes per trace in search
+  # block_retention: 720h                     # Per-tenant block retention (30 days)
+  # metrics_generator_ring_size: 1            # Metrics generator ring size
+  # metrics_generator_processors: ["local-blocks"]  # Per-tenant processors
+  # forwarders: ["jaeger"]                    # Trace forwarders
+
+  # Multi-tenancy options (commented for future use):
+  # per_tenant_override_config: /etc/overrides.yaml  # Per-tenant config file
+  # per_tenant_override_period: 10s                  # Config reload period
+# Memberlist configuration for clustering (commented for future use):
+# memberlist:
+#   node_name: tempo-1                      # Node name in cluster
+#   randomize_node_name: false              # Add random suffix to node name
+#   stream_timeout: 2s                      # Stream timeout
+#   retransmit_factor: 4                    # Retransmit factor
+#   bind_addr: []                           # Bind addresses
+#   bind_port: 7946                         # Bind port
+#   gossip_interval: 200ms                  # Gossip interval
+#   gossip_nodes: 2                         # Number of nodes to gossip to
+#   gossip_to_dead_nodes_time: 30s          # Time to gossip to dead nodes
+#   dead_node_reclaim_time: 0s              # Time to reclaim dead nodes
+#   compression_enabled: false              # Enable compression
+#   advertise_addr: ""                      # Advertise address
+#   advertise_port: 7946                    # Advertise port
+#   cluster_label: ""                       # Cluster label
+#   cluster_label_verification_disabled: false  # Disable cluster label verification
+#   join_members: []                        # Members to join on startup
+
+# Analytics and usage reporting (commented for future use):
+# analytics:
+#   reporting_enabled: false                # Disable usage reporting
