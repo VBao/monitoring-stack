@@ -168,31 +168,32 @@ graph LR
 
 #### For Application Developers
 ```mermaid
-graph TB
+flowchart TB
     subgraph "Your Application"
-        Code[Application Code]
-        SDK[OpenTelemetry SDK]
-        Instr[Auto Instrumentation]
+        Code("Application Code")
+        SDK("OpenTelemetry SDK<br>1. Import SDK<br>2. Configure endpoint")
+        Instr("Auto Instrumentation<br>3. Add custom metrics/traces")
     end
     
     subgraph "Our Stack"
-        Alloy[Alloy Collector]
-        Store[Storage Layer]
-        Graf[Grafana Dashboards]
+        Alloy("Alloy Collector")
+        Store("Storage Layer")
+        Graf("Grafana Dashboards<br>4. View & analyze data")
     end
     
     Code --> SDK
     Code --> Instr
-    SDK -->|OTLP| Alloy
-    Instr -->|OTLP| Alloy
+    SDK -->|"OTLP"| Alloy
+    Instr -->|"OTLP"| Alloy
     Alloy --> Store
     Store --> Graf
-    
-    Note1[1. Import OpenTelemetry SDK]
-    Note2[2. Configure OTLP endpoint]
-    Note3[3. Add custom metrics/traces]
-    Note4[4. View in Grafana]
 ```
+
+**Integration Steps:**
+1. Import the OpenTelemetry SDK into your application
+2. Configure the OTLP endpoint (http://localhost:4317)
+3. Add custom metrics, logs, and traces as needed
+4. View your telemetry data in Grafana dashboards
 
 #### Integration Examples
 
