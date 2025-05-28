@@ -2,13 +2,71 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
   scrape_timeout: 10s
+  # Add external labels for multi-cluster support
+  # external_labels:
+  #   cluster: "monitoring-stack"
+  #   environment: "development"
 
 scrape_configs:
-  - job_name: "otel-collector"
-    scrape_interval: 10s
-    metrics_path: /metrics
+  - job_name: "alloy"
     static_configs:
-      # - targets: ["srv-captain--otel-collector:9999"]
-      - targets: ["otel-collector:9999"]
-        labels:
-          component: "collector"
+      - targets: ["alloy:12345"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+    # Add service labels for better organization
+    relabel_configs:
+      - target_label: service
+        replacement: alloy
+
+  - job_name: "alloy-otel-metrics"
+    static_configs:
+      - targets: ["alloy:9999"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+    relabel_configs:
+      - target_label: service
+        replacement: otel-metrics
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+    relabel_configs:
+      - target_label: service
+        replacement: prometheus
+
+  # Add more service monitoring
+  - job_name: "tempo"
+    static_configs:
+      - targets: ["tempo:3200"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    relabel_configs:
+      - target_label: service
+        replacement: tempo
+
+  - job_name: "loki"
+    static_configs:
+      - targets: ["loki:3100"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    relabel_configs:
+      - target_label: service
+        replacement: loki
+
+  - job_name: "pyroscope"
+    static_configs:
+      - targets: ["pyroscope:4040"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    relabel_configs:
+      - target_label: service
+        replacement: pyroscope
+
+  - job_name: "grafana"
+    static_configs:
+      - targets: ["grafana:3000"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+    relabel_configs:
+      - target_label: service
+        replacement: grafana

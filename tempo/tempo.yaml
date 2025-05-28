@@ -124,60 +124,58 @@ compactor:
     # v2_prefetch_traces_count: 1000        # Number of traces to prefetch
 
 metrics_generator:
-  # Registry controls how metrics are collected and stored locally
   registry:
-    collection_interval: 30s # How often to collect metrics
-    stale_duration: 15m # Keep metrics for 15 minutes (extends default 5m)
+    collection_interval: 15s # Reduced for better responsiveness
+    stale_duration: 15m
+  
   storage:
-    path: /var/tempo/metrics # Local metrics storage path
-    remote_write_flush_deadline: 1m # Deadline for remote write operations
+    path: /var/tempo/metrics
+    remote_write_flush_deadline: 1m
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
+        headers:
+          X-Scope-OrgID: tempo
+        queue_config:
+          capacity: 10000
+          max_samples_per_send: 2000
+        
   traces_storage:
-    path: /var/tempo/wal # Path for traces used in metrics generation
+    path: /var/tempo/wal
 
-  # Processors generate different types of metrics from traces
   processor:
     span_metrics:
-      # Generate RED metrics (Rate, Errors, Duration) from spans
       histogram_buckets:
         [0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
-      enable_target_info: true # Include target_info metric
-
-      # Additional span metrics options (commented for future use):
-      # dimensions: ["http.method", "http.status_code"]  # Additional dimensions to include
-      # intrinsic_dimensions:                             # Default dimensions
-      #   service: true
-      #   span_name: true
-      #   span_kind: true
-      #   status_code: true
+      enable_target_info: true
+      # Add more dimensions for better observability
+      dimensions:
+        - service.name
+        - service.namespace
+        - deployment.environment
+        - http.method
+        - http.status_code
+        - rpc.method
+        - db.system
 
     service_graphs:
-      # Generate service dependency graphs and connection metrics
       histogram_buckets: [0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6.4, 12.8]
-      max_items: 10000 # Max service graph edges to track
-      wait: 10s # Wait time for edge completion
-
-      # Additional service graph options (commented for future use):
-      # dimensions: ["client", "server"]    # Custom dimensions for service graphs
-      # peer_attributes: ["db.name"]        # Additional peer attributes to include
+      max_items: 10000
+      wait: 10s
+      # Add peer attributes for better service mapping
+      peer_attributes:
+        - db.name
+        - db.system
+        - messaging.system
+        - rpc.service
 
     local_blocks:
-      # Generate metrics from local trace blocks (for queries)
-      max_live_traces: 10000 # Max live traces to track
-      max_block_duration: 30m # Max duration before flushing metrics block
-      max_block_bytes: 104857600 # Max block size (100MB)
-      flush_check_period: 10s # How often to check for flush
-      trace_idle_period: 30s # Idle time before trace completion
-      complete_block_timeout: 5m # Timeout for completing blocks
-
-  # Remote write configuration (commented for future use):
-  # remote_write:
-  #   - url: http://prometheus:9090/api/v1/write    # Prometheus remote write endpoint
-  #     send_exemplars: true                        # Send exemplars with metrics
-  #     headers:
-  #       X-Scope-OrgID: tenant1                    # Multi-tenancy header
-  #     queue_config:
-  #       capacity: 10000                           # Queue capacity
-  #       max_samples_per_send: 2000                # Max samples per batch
+      max_live_traces: 10000
+      max_block_duration: 30m
+      max_block_bytes: 104857600
+      flush_check_period: 10s
+      trace_idle_period: 30s
+      complete_block_timeout: 5m
 
 querier:
   max_concurrent_queries: 10 # Max concurrent queries per querier

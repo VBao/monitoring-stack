@@ -1,0 +1,163 @@
+// Grafana Alloy Configuration for Monitoring Stack
+// Optimized for Grafana ecosystem integration
+
+// OTLP receiver for traces, metrics, and logs
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+    max_recv_msg_size = "4MiB"
+    max_concurrent_streams = 50
+  }
+  
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+  
+  output {
+    traces  = [otelcol.processor.batch.traces.input]
+    metrics = [otelcol.processor.batch.metrics.input]
+    logs    = [otelcol.processor.batch.logs.input]
+  }
+}
+
+// Batch processor for traces
+otelcol.processor.batch "traces" {
+  timeout = "1s"
+  send_batch_size = 1024
+  send_batch_max_size = 2048
+  
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+// Batch processor for metrics
+otelcol.processor.batch "metrics" {
+  timeout = "1s"
+  send_batch_size = 1024
+  
+  output {
+    metrics = [otelcol.exporter.prometheus.default.input]
+  }
+}
+
+// Batch processor for logs
+otelcol.processor.batch "logs" {
+  timeout = "1s"
+  send_batch_size = 1024
+  
+  output {
+    logs = [otelcol.exporter.loki.default.input]
+  }
+}
+
+// Export traces to Tempo
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "http://tempo:4317"
+    tls {
+      insecure = true
+    }
+  }
+}
+
+// Export metrics as Prometheus metrics
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.mimir.receiver]
+}
+
+// Add log relabeling for better organization
+loki.relabel "add_labels" {
+  forward_to = [loki.write.default.receiver]
+  
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    target_label = "container"
+  }
+  
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label = "service"
+  }
+}
+
+// Export logs to Loki
+otelcol.exporter.loki "default" {
+  forward_to = [loki.relabel.add_labels.receiver]
+}
+
+// Loki write component
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+// Write metrics to Prometheus
+prometheus.remote_write "mimir" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+    
+    // Add these options for better timestamp handling
+    send_exemplars = true
+
+    queue_config {
+      min_backoff = "1s"
+      max_backoff = "5s"
+      max_samples_per_send = 500
+    }
+
+    write_relabel_config {
+        source_labels = ["__name__"]
+        regex = ".*"
+        action = "keep"
+        modulus = 1000
+    }
+  }
+}
+
+// Expose Prometheus metrics endpoint for scraping
+prometheus.exporter.self "alloy" {
+  // This exposes Alloy's own metrics
+}
+
+// Forward Alloy's own metrics
+prometheus.scrape "alloy_self" {
+  targets = prometheus.exporter.self.alloy.targets
+  forward_to = [prometheus.remote_write.mimir.receiver]
+  scrape_interval = "15s"
+}
+
+// Add metrics relabeling for better organization
+prometheus.relabel "add_labels" {
+  forward_to = [prometheus.remote_write.mimir.receiver]
+  
+  rule {
+    source_labels = ["__name__"]
+    target_label = "cluster"
+    replacement = "monitoring-stack"
+  }
+  
+  rule {
+    source_labels = ["job"]
+    target_label = "environment"
+    replacement = "development"
+  }
+}
+
+// Service discovery for Docker containers (optional)
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+  
+  filter {
+    name = "label"
+    values = ["monitoring.scrape=true"]
+  }
+}
+
+// Auto-scrape containers with monitoring labels
+prometheus.scrape "docker_containers" {
+  targets = discovery.docker.containers.targets
+  forward_to = [prometheus.relabel.add_labels.receiver]
+  scrape_interval = "30s"
+}

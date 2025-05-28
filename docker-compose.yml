@@ -1,13 +1,16 @@
 services:
-  otel:
-    image: otel/opentelemetry-collector-contrib:0.123.0
-    hostname: otel-collector
+  alloy:
+    image: grafana/alloy:v1.9.0-rc.1
+    hostname: alloy
     ports:
       - "4317:4317" # OTLP gRPC
       - "4318:4318" # OTLP HTTP
+      - "12345:12345" # Alloy UI
+      - "9999:9999" # Prometheus metrics from OTEL
     volumes:
-      - ./otel-collector/otel-collector-config.yaml:/etc/otel-collector-config.yaml
-    command: [ "--config", "/etc/otel-collector-config.yaml" ]
+      - ./alloy/config.alloy:/etc/alloy/config.alloy
+      - /var/run/docker.sock:/var/run/docker.sock:ro # For service discovery
+    command: ["run", "--server.http.listen-addr=0.0.0.0:12345", "/etc/alloy/config.alloy"]
     networks:
       - monitoring
 
@@ -17,10 +20,19 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus-data:/etc/prometheus
-    command: [ "--config.file=/etc/prometheus/prometheus.yml" ]
+    # command: [ "--config.file=/etc/prometheus/prometheus.yml" ]
     # command: [ "--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--web.console.libraries=/etc/prometheus/console_libraries", "--web.console.templates=/etc/prometheus/consoles", "--web.enable-lifecycle" ]
     # depends_on:
     #   - init_prometheus
+    command:
+    - "--config.file=/etc/prometheus/prometheus.yml"
+    - "--storage.tsdb.path=/prometheus"
+    - "--web.console.libraries=/etc/prometheus/console_libraries"
+    - "--web.console.templates=/etc/prometheus/consoles"
+    - "--web.enable-lifecycle"
+    - "--web.enable-admin-api" # Enable admin API
+    - "--storage.tsdb.retention.time=7d" # Set retention
+    - "--web.enable-remote-write-receiver" # Enable remote write receiver
     networks:
       - monitoring
 
@@ -50,6 +62,7 @@ services:
     entrypoint:
       - /usr/bin/loki
       - -config.file=/etc/loki/local-config.yaml
+      - -config.expand-env=true
     networks:
       - monitoring
 
@@ -75,10 +88,16 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_METRICS_ENABLED=true # Enable Grafana metrics
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor # Enable TraceQL editor
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:rw
       - ./grafana/dashboards:/var/lib/grafana/dashboards:rw
       - grafana-storage:/var/lib/grafana
+    labels:
+      - "monitoring.scrape=true"
+      - "monitoring.port=3000"
+      - "monitoring.path=/metrics"
     depends_on:
       - prometheus
       - loki
