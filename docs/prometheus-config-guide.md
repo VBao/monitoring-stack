@@ -43,22 +43,24 @@ Prometheus configuration uses specific data types:
 
 ```yaml
 global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
-  scrape_timeout: 10s
+  scrape_interval: 5s   # Optimized for fast metrics collection
+  evaluation_interval: 5s  # Optimized for fast alerting
+  scrape_timeout: 5s    # Keep timeout reasonable
 ```
 
 **Purpose**: Sets default values for all jobs and evaluation intervals
 
 **Configuration Parameters**:
 - `scrape_interval`: Default interval for scraping targets
+  - **Current**: `5s` (optimized for real-time monitoring)
   - **Default**: `15s`
   - **Valid Range**: `1s` to `1h`
   - **Format**: Duration string (`10s`, `1m`, `5m`)
   - **Performance**: Shorter intervals = more data points, higher load
-  - **Best Practice**: `15s` to `1m` for most use cases
+  - **Use Case**: Fast intervals support 1-minute rate calculations
 
 - `evaluation_interval`: How often to evaluate alerting rules
+  - **Current**: `5s` (optimized for fast alerting)
   - **Default**: `15s`
   - **Valid Range**: `1s` to `1h`
   - **Format**: Duration string
@@ -66,6 +68,7 @@ global:
   - **Recommendation**: Same as or multiple of `scrape_interval`
 
 - `scrape_timeout`: Default timeout for scrape requests
+  - **Current**: `5s` (balanced for fast scraping)
   - **Default**: `10s`
   - **Valid Range**: `1s` to `scrape_interval`
   - **Rule**: Must be less than `scrape_interval`
@@ -402,6 +405,64 @@ scrape_configs:
 ```
 
 **Purpose**: Monitors Grafana dashboarding service
+
+## Current Optimized Configuration
+
+The monitoring stack is currently configured with optimized settings for fast metrics collection and 1-minute rate calculations:
+
+```yaml
+# Current scrape_configs (optimized for speed)
+scrape_configs:
+  - job_name: "alloy"
+    static_configs:
+      - targets: ["alloy:12345"]
+    metrics_path: "/metrics"
+    scrape_interval: 5s  # Fast scraping for real-time monitoring
+    relabel_configs:
+      - target_label: service
+        replacement: alloy
+
+  - job_name: "otel-metrics"
+    static_configs:
+      - targets: ["alloy:9999"]
+    metrics_path: "/metrics"
+    scrape_interval: 5s  # Fast scraping for OTLP metrics
+    relabel_configs:
+      - target_label: service
+        replacement: otel-collector
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+    scrape_interval: 10s  # Moderate scraping for Prometheus itself
+    relabel_configs:
+      - target_label: service
+        replacement: prometheus
+
+  - job_name: "tempo"
+    static_configs:
+      - targets: ["tempo:3200"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s  # Standard scraping for Tempo
+    relabel_configs:
+      - target_label: service
+        replacement: tempo
+
+  - job_name: "loki"
+    static_configs:
+      - targets: ["loki:3100"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s  # Standard scraping for Loki
+    relabel_configs:
+      - target_label: service
+        replacement: loki
+```
+
+**Key Optimizations**:
+- **Alloy Metrics**: 5s intervals for real-time pipeline monitoring
+- **OTLP Metrics**: 5s intervals for fast telemetry data processing
+- **Core Services**: 10-15s intervals balancing performance and load
+- **Service Labels**: Consistent labeling across all jobs for better querying
 
 ## Advanced Configuration
 

@@ -20,6 +20,8 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus-data:/etc/prometheus
+    ports:
+      - "9090:9090"
     # command: [ "--config.file=/etc/prometheus/prometheus.yml" ]
     # command: [ "--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--web.console.libraries=/etc/prometheus/console_libraries", "--web.console.templates=/etc/prometheus/consoles", "--web.enable-lifecycle" ]
     # depends_on:
@@ -30,9 +32,11 @@ services:
     - "--web.console.libraries=/etc/prometheus/console_libraries"
     - "--web.console.templates=/etc/prometheus/consoles"
     - "--web.enable-lifecycle"
-    - "--web.enable-admin-api" # Enable admin API
-    - "--storage.tsdb.retention.time=7d" # Set retention
-    - "--web.enable-remote-write-receiver" # Enable remote write receiver
+    - "--web.enable-admin-api"
+    - "--storage.tsdb.retention.time=7d"
+    - "--web.enable-remote-write-receiver"
+    - "--storage.tsdb.min-block-duration=5m"
+    - "--storage.tsdb.max-block-duration=2h"
     networks:
       - monitoring
 
@@ -91,8 +95,9 @@ services:
       - GF_METRICS_ENABLED=true # Enable Grafana metrics
       - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor # Enable TraceQL editor
     volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning:rw
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:rw
       - ./grafana/dashboards:/var/lib/grafana/dashboards:rw
+      - ./grafana/dashboard.yaml:/etc/grafana/provisioning/dashboards/main.yaml
       - grafana-storage:/var/lib/grafana
     labels:
       - "monitoring.scrape=true"

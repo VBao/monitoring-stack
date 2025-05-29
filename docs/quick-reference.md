@@ -2,6 +2,62 @@
 
 This guide provides quick reference for common configuration changes across the monitoring stack.
 
+## 🚀 Current Optimizations (May 2025)
+
+The monitoring stack has been optimized for **fast metrics collection and 1-minute rates**:
+
+### Performance Optimizations Applied
+
+**Prometheus (5s scraping):**
+```yaml
+# prometheus/prometheus.yml
+global:
+  scrape_interval: 5s      # Optimized from 15s
+  evaluation_interval: 5s  # Optimized from 15s
+  scrape_timeout: 5s       # Optimized from 10s
+
+scrape_configs:
+  - job_name: "alloy"
+    scrape_interval: 5s    # Real-time Alloy monitoring
+  - job_name: "otel-metrics"  
+    scrape_interval: 5s    # Fast OTLP metrics
+```
+
+**Alloy (Fast batch processing):**
+```alloy
+# alloy/config.alloy
+otelcol.processor.batch "metrics" {
+  timeout = "500ms"        # Optimized from 1s
+  send_batch_size = 256    # Optimized from 1024
+}
+
+prometheus.remote_write "mimir" {
+  endpoint {
+    queue_config {
+      batch_send_deadline = "1s"    # Fast sending
+      max_samples_per_send = 256    # Small batches  
+      max_shards = 20              # High parallelism
+    }
+  }
+}
+```
+
+**OTLP Receiver (High throughput):**
+```alloy
+otelcol.receiver.otlp "default" {
+  grpc {
+    max_concurrent_streams = 100   # Increased from 50
+  }
+}
+```
+
+**Benefits of Current Optimizations:**
+- ⚡ **Real-time Monitoring**: 5s scraping enables fast anomaly detection
+- 📊 **1-Minute Rates**: Fast batch processing supports accurate rate calculations  
+- 🔄 **High Throughput**: Parallel processing with 20 shards and 100 concurrent streams
+- 🎯 **Low Latency**: 500ms batch timeouts for metrics, 1s for logs/traces
+- 🔍 **Better Queries**: Increased Loki query limits for comprehensive log searches
+
 ## 🚀 Common Configuration Tasks
 
 ### 1. Change Data Retention

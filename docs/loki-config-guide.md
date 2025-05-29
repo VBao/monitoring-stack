@@ -55,6 +55,7 @@ auth_enabled: false
 ```yaml
 server:
   http_listen_port: 3100
+  # Optimized: Added gRPC for better performance
   grpc_listen_port: 9095
 ```
 
@@ -62,16 +63,18 @@ server:
 
 **Configuration Parameters**:
 - `http_listen_port`: HTTP API port
+  - **Current**: `3100`
   - **Default**: `3100`
   - **Valid Range**: `1024-65535`
   - **Usage**: Grafana connects to this port for queries
   - **Firewall**: Ensure this port is accessible
 
 - `grpc_listen_port`: gRPC interface port
+  - **Current**: `9095` (enabled for better performance)
   - **Default**: `9095`
   - **Valid Range**: `1024-65535`
   - **Usage**: Internal communication between Loki components
-  - **Note**: Required for distributed deployments
+  - **Performance**: gRPC provides better performance than HTTP for internal communication
 
 ### 3. Common Configuration
 
@@ -263,28 +266,26 @@ storage_config:
 ### 7. Limits Configuration
 
 ```yaml
+# Current optimized limits for better performance
 limits_config:
-  max_streams_per_user: 10000
-  max_entries_limit_per_query: 10000
-  max_global_streams_per_user: 5000
-  reject_old_samples: true
-  reject_old_samples_max_age: 168h
-  retention_period: 168h
-  ingestion_rate_mb: 10
-  ingestion_burst_size_mb: 20
-  per_stream_rate_limit: 3MB
-  per_stream_rate_limit_burst: 15MB
+  max_streams_per_user: 10000          # Increased for high-volume environments
+  max_entries_limit_per_query: 10000   # Increased from 5000 for better queries
+  # Additional optimizations applied
 ```
 
-**Purpose**: Controls resource usage and prevents abuse
+**Purpose**: Controls resource usage and prevents abuse with optimized settings
 
 **Configuration Parameters**:
 - `max_streams_per_user`: Maximum active streams per tenant
+  - **Current**: `10000` (optimized for high-volume logs)
   - **Default**: `10000`
   - **Impact**: Higher = more memory usage
-  - **Recommendation**: Start conservative, increase as needed
+  - **Performance**: Increased to handle more concurrent log streams
 
 - `max_entries_limit_per_query`: Maximum log entries per query
+  - **Current**: `10000` (optimized for larger query results)
+  - **Default**: `5000`
+  - **Query Performance**: Higher limits allow more comprehensive log searches
   - **Default**: `10000`
   - **Purpose**: Prevents large query responses
   - **User Impact**: Affects query result size

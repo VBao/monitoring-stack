@@ -59,6 +59,7 @@ otelcol.receiver.otlp "default" {
   - **Impact**: Larger values allow bigger traces but use more memory
 
 - `grpc.max_concurrent_streams`: Maximum concurrent gRPC streams
+  - **Current**: `100` (optimized for higher throughput)
   - **Default**: `50`
   - **Valid Range**: `1` to `1000+`
   - **Impact**: Higher values support more concurrent connections
@@ -70,6 +71,17 @@ otelcol.receiver.otlp "default" {
 ### 2. Batch Processors (Data Processing)
 
 ```alloy
+// Optimized for fast metrics processing
+otelcol.processor.batch "metrics" {
+  timeout = "500ms"
+  send_batch_size = 256
+  
+  output {
+    metrics = [otelcol.exporter.prometheus.default.input]
+  }
+}
+
+// Standard processing for traces
 otelcol.processor.batch "traces" {
   timeout = "1s"
   send_batch_size = 1024
@@ -79,20 +91,32 @@ otelcol.processor.batch "traces" {
     traces = [otelcol.exporter.otlp.tempo.input]
   }
 }
+
+// Standard processing for logs
+otelcol.processor.batch "logs" {
+  timeout = "1s"
+  send_batch_size = 1024
+  
+  output {
+    logs = [otelcol.exporter.loki.default.input]
+  }
+}
 ```
 
-**Purpose**: Batches telemetry data for efficient transmission
+**Purpose**: Batches telemetry data for efficient transmission with different optimizations per data type
 
 **Configuration Parameters**:
 - `timeout`: Time to wait before sending partial batch
-  - **Default**: `"1s"`
+  - **Metrics**: `"500ms"` for fast processing (optimized for 1-minute rates)
+  - **Traces/Logs**: `"1s"` for standard efficiency
   - **Valid Values**: `"100ms"`, `"500ms"`, `"1s"`, `"5s"`
   - **Trade-off**: Lower = more real-time, Higher = more efficient
 
 - `send_batch_size`: Preferred batch size
-  - **Default**: `1024`
+  - **Metrics**: `256` for fast processing with low latency
+  - **Traces/Logs**: `1024` for standard efficiency
   - **Valid Range**: `1` to `10000+`
-  - **Performance**: Optimal range is usually `500-2000`
+  - **Performance**: Smaller batches = faster processing, larger = more efficient
 
 - `send_batch_max_size`: Maximum batch size
   - **Default**: `2048`
@@ -192,17 +216,19 @@ prometheus.remote_write "mimir" {
     url = "http://prometheus:9090/api/v1/write"
     
     send_exemplars = true
-
+    send_native_histograms = true
+    
+    // Aggressive settings for speed
     queue_config {
-      min_backoff = "1s"
-      max_backoff = "5s"
-      max_samples_per_send = 500
+      batch_send_deadline = "1s"   // Fast sending
+      max_samples_per_send = 256   // Small batches for speed
+      max_shards = 20             // Parallel processing
     }
   }
 }
 ```
 
-**Purpose**: Sends metrics to Prometheus
+**Purpose**: Sends metrics to Prometheus with optimized settings for fast processing
 
 **Configuration Parameters**:
 - `endpoint.url`: Prometheus remote write URL
@@ -213,19 +239,53 @@ prometheus.remote_write "mimir" {
   - **Default**: `true`
   - **Purpose**: Links metrics to traces
 
-- `queue_config.min_backoff`: Minimum retry delay
-  - **Default**: `"1s"`
-  - **Valid Values**: `"100ms"`, `"500ms"`, `"1s"`, `"5s"`
+- `send_native_histograms`: Send native histogram format
+  - **Current**: `true` (enables Prometheus native histograms)
+  - **Performance**: Better compression and query performance
 
-- `queue_config.max_backoff`: Maximum retry delay
+- `queue_config.batch_send_deadline`: Maximum time to wait before sending
+  - **Current**: `"1s"` (optimized for fast processing)
   - **Default**: `"5s"`
-  - **Valid Values**: `"1s"`, `"5s"`, `"30s"`, `"60s"`
+  - **Trade-off**: Lower = more real-time, higher = more efficient
 
 - `queue_config.max_samples_per_send`: Samples per batch
+  - **Current**: `256` (optimized for speed)
   - **Default**: `500`
   - **Valid Range**: `100` to `2000`
+  - **Performance**: Smaller batches = faster processing
 
-## Docker Service Discovery
+- `queue_config.max_shards`: Maximum number of parallel writers
+  - **Current**: `20` (high parallelism for speed)
+  - **Default**: `10`
+  - **Performance**: More shards = better throughput for high-volume metrics
+
+## Alloy Self-Monitoring and Scraping
+
+### 8. Alloy Self-Monitoring
+
+```alloy
+prometheus.exporter.self "alloy" {}
+
+prometheus.scrape "alloy_self" {
+  targets = prometheus.exporter.self.alloy.targets
+  forward_to = [prometheus.remote_write.mimir.receiver]
+  scrape_interval = "10s"  // Faster scraping for monitoring
+}
+```
+
+**Purpose**: Monitors Alloy's own metrics for performance and health
+
+**Configuration Parameters**:
+- `prometheus.exporter.self`: Exposes Alloy's internal metrics
+  - **Metrics**: Component health, pipeline throughput, memory usage
+  - **Endpoint**: Available at `/metrics` on Alloy's HTTP port
+
+- `scrape_interval`: How often to collect Alloy's own metrics
+  - **Current**: `"10s"` (optimized for real-time monitoring)
+  - **Default**: `"15s"`
+  - **Performance**: Faster intervals provide better visibility into pipeline health
+
+### 9. Docker Container Discovery
 
 ```alloy
 discovery.docker "containers" {
@@ -236,19 +296,29 @@ discovery.docker "containers" {
     values = ["monitoring.scrape=true"]
   }
 }
+
+prometheus.scrape "docker_containers" {
+  targets = discovery.docker.containers.targets
+  forward_to = [prometheus.remote_write.mimir.receiver]
+  scrape_interval = "10s"  // Faster scraping
+}
 ```
 
-**Purpose**: Automatically discovers Docker containers for monitoring
+**Purpose**: Automatically discovers and scrapes Docker containers with monitoring labels
 
 **Configuration Parameters**:
-- `host`: Docker socket path
-  - **Default**: `"unix:///var/run/docker.sock"`
-  - **Windows**: `"npipe:////./pipe/docker_engine"`
-  - **Remote**: `"tcp://hostname:2376"`
+- `filter.name`: Filter type for container discovery
+  - **Current**: `"label"` (filters by Docker labels)
+  - **Alternative**: `"container"` (filter by container names)
 
-- `filter.values`: Label filter for discovery
-  - **Format**: `["label_key=label_value"]`
-  - **Example**: `["monitoring.scrape=true"]`
+- `filter.values`: Specific filter criteria
+  - **Current**: `["monitoring.scrape=true"]`
+  - **Usage**: Only containers with this label will be scraped
+  - **Best Practice**: Add this label to containers you want to monitor
+
+- `scrape_interval`: Frequency of metrics collection
+  - **Current**: `"10s"` (optimized for fast data ingestion)
+  - **Impact**: Faster intervals provide more real-time metrics
 
 ## Configuration Validation
 

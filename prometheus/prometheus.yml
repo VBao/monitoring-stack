@@ -1,40 +1,36 @@
 global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
-  scrape_timeout: 10s
-  # Add external labels for multi-cluster support
-  # external_labels:
-  #   cluster: "monitoring-stack"
-  #   environment: "development"
+  scrape_interval: 5s   # Much faster - was 15s
+  evaluation_interval: 5s  # Much faster - was 15s
+  scrape_timeout: 5s    # Keep timeout reasonable
 
 scrape_configs:
   - job_name: "alloy"
     static_configs:
       - targets: ["alloy:12345"]
     metrics_path: "/metrics"
-    scrape_interval: 10s
-    # Add service labels for better organization
+    scrape_interval: 5s  # Faster scraping
     relabel_configs:
       - target_label: service
         replacement: alloy
 
-  - job_name: "alloy-otel-metrics"
+  - job_name: "otel-metrics"
     static_configs:
       - targets: ["alloy:9999"]
     metrics_path: "/metrics"
-    scrape_interval: 10s
+    scrape_interval: 5s  # Faster scraping
     relabel_configs:
       - target_label: service
-        replacement: otel-metrics
+        replacement: otel-collector
 
+  # Keep other jobs as they were but with faster intervals
   - job_name: "prometheus"
     static_configs:
       - targets: ["localhost:9090"]
+    scrape_interval: 10s
     relabel_configs:
       - target_label: service
         replacement: prometheus
 
-  # Add more service monitoring
   - job_name: "tempo"
     static_configs:
       - targets: ["tempo:3200"]
