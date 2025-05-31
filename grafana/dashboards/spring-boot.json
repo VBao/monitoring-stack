@@ -550,13 +550,17 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
+          "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum by(http_route) (http_server_request_duration_seconds_count{service_name=\"$app_name\", http_response_status_code!~\"5.*\"})\n/\nsum by(http_route) (http_server_request_duration_seconds_count{service_name=\"$app_name\"})",
+          "expr": "sum by(http_route) (http_server_request_duration_seconds_count{service_name=\"$app_name\", http_response_status_code=~\"5.*\", http_route!=\"\"}) / sum by(http_route) (http_server_request_duration_seconds_count{service_name=\"$app_name\", http_route!=\"\"})",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
           "interval": "",
           "legendFormat": "{{uri}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "useBackend": false
         }
       ],
       "title": "Percent of 5xx Requests",
