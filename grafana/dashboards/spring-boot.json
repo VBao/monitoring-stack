@@ -24,7 +24,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 2,
+  "id": 1,
   "links": [],
   "panels": [
     {
@@ -552,7 +552,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum by(http_route)(http_server_request_duration_seconds_count{service_name=\"$app_name\", http_response_status_code=~\"5.*\", http_route!=\"/actuator/prometheus\"}) \n/\n sum by(http_route) (http_server_request_duration_seconds_count{service_name=\"$app_name\", http_route!=\"/actuator/prometheus\"})",
+          "expr": "sum by(http_route) (http_server_request_duration_seconds_count{service_name=\"$app_name\", http_response_status_code!~\"5.*\"})\n/\nsum by(http_route) (http_server_request_duration_seconds_count{service_name=\"$app_name\"})",
           "interval": "",
           "legendFormat": "{{uri}}",
           "range": true,
@@ -1126,5 +1126,5 @@
   "timezone": "",
   "title": "HRMS Backend New",
   "uid": "6a4a6cd5-3596-4d73-8c08-8f7a2b87f194",
-  "version": 4
+  "version": 1
 }
