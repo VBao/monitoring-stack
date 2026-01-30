@@ -1,0 +1,114 @@
+# Host Monitoring Stack - Add-on for monitoring the host machine
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.host-monitoring.yml up -d
+
+services:
+  # Node Exporter - Collects host machine metrics (CPU, Memory, Disk, Network, etc.)
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node-exporter
+    hostname: node-exporter
+    restart: unless-stopped
+    command:
+      - '--path.rootfs=/host'
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--collector.netclass.ignored-devices=^(veth.*|docker.*|br-.*|lo)$$'
+      - '--collector.netdev.device-exclude=^(veth.*|docker.*|br-.*|lo)$$'
+      - '--collector.cpu'
+      - '--collector.meminfo'
+      - '--collector.diskstats'
+      - '--collector.filesystem'
+      - '--collector.loadavg'
+      - '--collector.netdev'
+      - '--collector.netstat'
+      - '--collector.time'
+      - '--collector.uname'
+      - '--collector.vmstat'
+      - '--collector.systemd'
+      - '--collector.processes'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host:ro,rslave
+    ports:
+      - "9100:9100"
+    networks:
+      - monitoring
+    pid: host
+    labels:
+      - "monitoring.scrape=true"
+      - "monitoring.port=9100"
+      - "monitoring.path=/metrics"
+      - "monitoring.job=node-exporter"
+
+  # Promtail - Collects host logs and sends to Loki
+  promtail:
+    image: grafana/promtail:3.5.0
+    container_name: promtail
+    hostname: promtail
+    restart: unless-stopped
+    volumes:
+      - ./promtail/promtail-config.yaml:/etc/promtail/config.yaml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yaml
+    ports:
+      - "9080:9080"
+    networks:
+      - monitoring
+    depends_on:
+      - loki
+
+  # Windows Exporter - For Windows hosts (optional)
+  # Uncomment if running on Windows Server
+  # windows-exporter:
+  #   image: ghcr.io/prometheus-community/windows-exporter:latest
+  #   container_name: windows-exporter
+  #   hostname: windows-exporter
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9182:9182"
+  #   networks:
+  #     - monitoring
+  #   labels:
+  #     - "monitoring.scrape=true"
+  #     - "monitoring.port=9182"
+  #     - "monitoring.path=/metrics"
+
+  # cAdvisor - Container metrics (Docker resource usage)
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    hostname: cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "8080:8080"
+    networks:
+      - monitoring
+    command:
+      - '--docker_only=true'
+      - '--housekeeping_interval=10s'
+      - '--max_housekeeping_interval=15s'
+      - '--event_storage_event_limit=default=0'
+      - '--event_storage_age_limit=default=0'
+      - '--store_container_labels=false'
+      - '--disable_metrics=disk,diskIO,network,tcp,udp,percpu,sched,process'
+    labels:
+      - "monitoring.scrape=true"
+      - "monitoring.port=8080"
+      - "monitoring.path=/metrics"
+
+networks:
+  monitoring:
+    external: true

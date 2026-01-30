@@ -1,0 +1,143 @@
+# Promtail Configuration for Host Log Collection
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: info
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    tenant_id: host-logs
+    batchwait: 1s
+    batchsize: 1048576
+    timeout: 10s
+    backoff_config:
+      min_period: 500ms
+      max_period: 5m
+      max_retries: 10
+
+scrape_configs:
+  # System logs (Linux)
+  - job_name: syslog
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: syslog
+          host: ${HOSTNAME}
+          __path__: /var/log/syslog
+
+  - job_name: auth
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: auth
+          host: ${HOSTNAME}
+          __path__: /var/log/auth.log
+
+  - job_name: kernel
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: kernel
+          host: ${HOSTNAME}
+          __path__: /var/log/kern.log
+
+  # Docker container logs
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: label
+            values: ["logging=promtail"]
+
+    relabel_configs:
+      # Extract container name
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container'
+
+      # Extract container ID
+      - source_labels: ['__meta_docker_container_id']
+        target_label: 'container_id'
+
+      # Extract image name
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: 'stream'
+
+      # Add compose service name if available
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'compose_service'
+
+      # Add compose project name
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: 'compose_project'
+
+    pipeline_stages:
+      # Parse JSON logs if applicable
+      - json:
+          expressions:
+            timestamp: time
+            level: level
+            message: msg
+
+      # Extract timestamp
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+          fallback_formats:
+            - "2006-01-02T15:04:05.999999999Z07:00"
+            - "2006-01-02T15:04:05Z07:00"
+
+      # Set log level label
+      - labels:
+          level:
+
+  # Application logs in standard locations
+  - job_name: application_logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: app_logs
+          host: ${HOSTNAME}
+          __path__: /var/log/*.log
+
+  # Nginx/Apache logs (if applicable)
+  - job_name: web_server
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: nginx
+          host: ${HOSTNAME}
+          log_type: access
+          __path__: /var/log/nginx/access.log
+
+      - targets:
+          - localhost
+        labels:
+          job: nginx
+          host: ${HOSTNAME}
+          log_type: error
+          __path__: /var/log/nginx/error.log
+
+    pipeline_stages:
+      # Parse nginx access logs
+      - regex:
+          expression: '^(?P<remote_addr>[\w\.]+) - (?P<remote_user>[^ ]*) \[(?P<time_local>.*)\] "(?P<method>[^ ]*) (?P<request>[^ ]*) (?P<protocol>[^ ]*)" (?P<status>[\d]+) (?P<body_bytes_sent>[\d]+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"'
+
+      - labels:
+          method:
+          status:
+          remote_addr:
+
+limits_config:
+  readline_rate_enabled: true
+  readline_rate: 10000
+  readline_burst: 20000
