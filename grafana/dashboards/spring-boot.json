@@ -1001,7 +1001,7 @@
           },
           "direction": "backward",
           "editorMode": "code",
-          "expr": "sum by(level) (rate({service_name=\"$name_space/$app_name\"} | pattern `<date> <time> <_>=<trace_id> <_>=<span_id> <_>=<trace_flags> <type> <_> --- <msg>` | level != `` |= `` [1m]))",
+          "expr": "sum by(severity) (rate({service_name=\"$name_space/$app_name\"} | json | severity != \"\" [1m]))",
           "hide": false,
           "queryType": "range",
           "refId": "A"
@@ -1046,7 +1046,7 @@
           },
           "direction": "backward",
           "editorMode": "code",
-          "expr": "{service_name=\"$name_space/$app_name\"} | pattern `<date> <time> <_>=<trace_id> <_>=<span_id> <_>=<trace_flags> <type> <_> --- <msg>` | line_format \"{{.compose_service}}\\t{{.type}}\\ttrace_id={{.trace_id}}\\t{{.msg}}\" |= \"$log_keyword\"",
+          "expr": "{service_name=\"$name_space/$app_name\"} | json | line_format \"{{.resources_service_name}}\\t{{.severity}}\\ttrace_id={{.traceid}}\\t{{.body}}\" |= \"$log_keyword\"",
           "hide": false,
           "queryType": "range",
           "refId": "A"
