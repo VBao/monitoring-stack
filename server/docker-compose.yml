@@ -118,7 +118,12 @@ services:
       - SLACK_WEBHOOK_URL_CRITICAL=${SLACK_WEBHOOK_URL_CRITICAL:-}
     volumes:
       - ./stack/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:rw
-      - ./stack/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:rw
+      # Not mounted: alert-rules.yaml provisions six Loki alert rules that have
+      # never run on this stack. The live Grafana carries four hand-made rules and
+      # the default notification policy routes to Slack, so mounting this would put
+      # six new rules straight into production paging. Enable it deliberately, not
+      # as a side effect of re-pointing the config mounts.
+      # - ./stack/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:rw
       - ./stack/grafana/dashboards:/var/lib/grafana/dashboards:rw
       - ./stack/grafana/dashboard.yaml:/etc/grafana/provisioning/dashboards/main.yaml
       - grafana-storage:/var/lib/grafana
