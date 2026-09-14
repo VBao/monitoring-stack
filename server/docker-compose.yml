@@ -54,7 +54,7 @@ services:
       - monitoring
 
   tempo:
-    image: grafana/tempo:2.10.8 # newest release compatible with this config; 3.x replaces the ingester with a Kafka-backed live-store/block-builder
+    image: grafana/tempo:3.0.3 # `latest` is a v3.0.0 main-branch snapshot frozen at 2026-06-02, older than this release
     hostname: tempo
     volumes:
       - ./stack/tempo/tempo.yaml:/etc/tempo.yaml

@@ -14,16 +14,16 @@ distributor:
     kvstore:
       store: inmemory
 
-ingester:
-  lifecycler:
-    ring:
-      replication_factor: 1
-      kvstore:
-        store: inmemory
-    final_sleep: 0s
-  trace_idle_period: 10s
-  max_block_bytes: 1_000_000
-  max_block_duration: 5m
+# Tempo 3.x has no `ingester:` block. The write path is split into a live-store
+# (holds recent traces and answers queries on them) and a block-builder (flushes
+# completed blocks to the backend), and `compactor:` is replaced by
+# backend_scheduler/backend_worker. Both run in-process under -target=all and
+# need no Kafka — the `ingest:` block is only for the distributed deployment.
+# Their WAL paths default beneath /var/tempo, which is the persistent volume, so
+# traces still survive a restart. The old ingester tuning
+# (trace_idle_period / max_block_bytes / max_block_duration) is deliberately not
+# carried over: recent traces are served from the live-store regardless of flush
+# cadence, so the upstream defaults apply with no change in query behaviour.
 
 metrics_generator:
   registry:
