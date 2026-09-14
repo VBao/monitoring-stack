@@ -24,6 +24,14 @@ distributor:
 # (trace_idle_period / max_block_bytes / max_block_duration) is deliberately not
 # carried over: recent traces are served from the live-store regardless of flush
 # cadence, so the upstream defaults apply with no change in query behaviour.
+#
+# The `local-blocks` metrics-generator processor was removed in 3.x along with
+# its local block storage; the live-store answers those queries instead, so
+# listing it in the overrides below only earns a warning every 10s.
+#
+# The OTLP receiver endpoints stay written out in full because 3.x changed the
+# receiver default from all interfaces to localhost, which would silently stop
+# accepting traces from the other containers.
 
 metrics_generator:
   registry:
@@ -55,5 +63,5 @@ query_frontend:
 overrides:
   defaults:
     metrics_generator:
-      processors: [service-graphs, span-metrics, local-blocks]
+      processors: [service-graphs, span-metrics]
       generate_native_histograms: both
