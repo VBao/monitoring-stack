@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml" />
+
+    <!-- Spring Boot profile detection -->
+    <springProfile name="!prod">
+        <property name="LOG_LEVEL" value="INFO" />
+    </springProfile>
+    <springProfile name="prod">
+        <property name="LOG_LEVEL" value="INFO" />
+    </springProfile>
+
+    <!-- Enhanced patterns optimized for Loki parsing -->
+    <property name="CONSOLE_LOG_PATTERN"
+        value="%clr(%-5level) %clr([%-10.10thread]){magenta} %clr(%-30.30logger{0}){cyan} %clr(---){faint} %m%n" />
+
+    <!-- File pattern matching your Loki query exactly -->
+    <property name="FILE_LOG_PATTERN"
+        value="%d{HH:mm:ss} %-5level --- %msg %n" />
+
+    <!-- Console Appender -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+            <charset>utf8</charset>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>${LOG_LEVEL}</level>
+        </filter>
+    </appender>
+
+    <!-- File Appender with Loki-compatible pattern -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/hrms.log</file>
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+            <charset>utf8</charset>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>logs/archived/hrms.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>10GB</totalSizeCap>
+        </rollingPolicy>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+    </appender>
+
+    <appender name="OTEL"
+        class="io.opentelemetry.instrumentation.logback.appender.v1_0.OpenTelemetryAppender">
+        <!-- Capture additional attributes for better monitoring -->
+        <captureExperimentalAttributes>true</captureExperimentalAttributes>
+        <!-- Disabled code attributes to reduce overhead -->
+        <captureCodeAttributes>false</captureCodeAttributes>
+        <captureMarkerAttribute>true</captureMarkerAttribute>
+
+        <captureMdcAttributes>*</captureMdcAttributes>
+        
+        <!-- Send all logs to Loki for comprehensive monitoring -->
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+    </appender>
+
+    <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/hrms-error.log</file>
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+            <charset>utf8</charset>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>logs/archived/hrms-error.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>90</maxHistory>
+            <totalSizeCap>5GB</totalSizeCap>
+        </rollingPolicy>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>ERROR</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <!-- Async wrapper for better performance -->
+    <appender name="ASYNC_OTEL" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="OTEL" />
+        <!-- Increased queue size for high-volume logging -->
+        <queueSize>8192</queueSize>
+        <!-- Discard INFO and DEBUG logs when queue is 80% full to prevent blocking -->
+        <discardingThreshold>20</discardingThreshold>
+        <!-- Reduced flush time to prevent long shutdown delays -->
+        <maxFlushTime>1000</maxFlushTime>
+        <!-- CRITICAL: Never block application threads if queue is full -->
+        <neverBlock>true</neverBlock>
+        <!-- Set to false to improve performance (caller data is expensive) -->
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <!-- Async wrapper for FILE appender -->
+    <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="FILE" />
+        <queueSize>2048</queueSize>
+        <discardingThreshold>20</discardingThreshold>
+        <maxFlushTime>1000</maxFlushTime>
+        <neverBlock>true</neverBlock>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <!-- Async wrapper for ERROR_FILE appender -->
+    <appender name="ASYNC_ERROR_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="ERROR_FILE" />
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold> <!-- Never discard errors -->
+        <maxFlushTime>2000</maxFlushTime> <!-- Allow more time for errors -->
+        <neverBlock>true</neverBlock>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <!-- Spring Boot specific loggers - Filter out INFO, show WARN and above -->
+    <logger name="org.springframework" level="WARN" />
+    <logger name="org.hibernate" level="WARN" />
+    <logger name="com.microsoft.sqlserver" level="WARN" />
+    <logger name="io.opentelemetry" level="WARN" />
+    
+    <!-- Additional Spring Boot components -->
+    <logger name="org.apache.catalina" level="WARN" />
+    <logger name="org.apache.tomcat" level="WARN" />
+    <logger name="org.springframework.boot" level="WARN" />
+    <logger name="org.springframework.data" level="WARN" />
+    <logger name="org.springframework.web" level="WARN" />
+    <logger name="org.springframework.orm.jpa" level="WARN" />
+    <logger name="com.zaxxer.hikari" level="WARN" />
+
+    <logger name="com.allianceone.hrm" level="${LOG_LEVEL}" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="ASYNC_FILE" />
+        <appender-ref ref="ASYNC_ERROR_FILE" />
+        <appender-ref ref="ASYNC_OTEL" />
+    </logger>
+
+    <!-- Security-related logging - Show WARN and above -->
+    <logger name="org.springframework.security" level="WARN" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="ASYNC_FILE" />
+        <appender-ref ref="ASYNC_OTEL" />
+    </logger>
+
+    <!-- Root logger - OTEL appender ensures framework errors (Hibernate, HikariCP,
+         Tomcat, SQL Server) reach Loki for dashboard alerts (database_errors,
+         critical_error_pattern, startup_failures) -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="ASYNC_OTEL" />
+    </root>
+</configuration>

@@ -10,7 +10,7 @@ The monitoring stack has been optimized for **fast metrics collection and 1-minu
 
 **Prometheus (5s scraping):**
 ```yaml
-# prometheus/prometheus.yml
+# stack/prometheus/prometheus.yml
 global:
   scrape_interval: 5s      # Optimized from 15s
   evaluation_interval: 5s  # Optimized from 15s
@@ -25,7 +25,7 @@ scrape_configs:
 
 **Alloy (Fast batch processing):**
 ```alloy
-# alloy/config.alloy
+# stack/alloy/config.alloy
 otelcol.processor.batch "metrics" {
   timeout = "500ms"        # Optimized from 1s
   send_batch_size = 256    # Optimized from 1024
@@ -73,14 +73,14 @@ services:
 
 **Loki (7 days → 30 days):**
 ```yaml
-# loki/loki-config.yaml
+# stack/loki/loki-config.yaml
 limits_config:
   retention_period: 720h  # 30 days
 ```
 
 **Tempo (7 days → 30 days):**
 ```yaml
-# tempo/tempo.yaml
+# stack/tempo/tempo.yaml
 compactor:
   compaction:
     block_retention: 720h  # 30 days
@@ -90,7 +90,7 @@ compactor:
 
 **High-volume log ingestion:**
 ```yaml
-# loki/loki-config.yaml
+# stack/loki/loki-config.yaml
 limits_config:
   ingestion_rate_mb: 50          # Default: 4MB/s
   ingestion_burst_size_mb: 100   # Default: 6MB
@@ -100,7 +100,7 @@ limits_config:
 
 **Large trace ingestion:**
 ```yaml
-# tempo/tempo.yaml
+# stack/tempo/tempo.yaml
 overrides:
   ingestion_rate_limit_bytes: 50000000    # 50MB/s (default: 15MB/s)
   ingestion_burst_size_bytes: 100000000   # 100MB (default: 20MB)
@@ -109,7 +109,7 @@ overrides:
 
 **High-throughput metrics:**
 ```alloy
-# alloy/config.alloy
+# stack/alloy/config.alloy
 otelcol.processor.batch "metrics" {
   timeout = "2s"
   send_batch_size = 2048      # Default: 1024
@@ -121,7 +121,7 @@ otelcol.processor.batch "metrics" {
 
 **Loki with S3:**
 ```yaml
-# loki/loki-config.yaml
+# stack/loki/loki-config.yaml
 storage_config:
   aws:
     s3: s3://my-loki-bucket/chunks
@@ -132,7 +132,7 @@ storage_config:
 
 **Tempo with S3:**
 ```yaml
-# tempo/tempo.yaml
+# stack/tempo/tempo.yaml
 storage:
   trace:
     backend: s3
@@ -147,7 +147,7 @@ storage:
 
 **Loki multi-tenancy:**
 ```yaml
-# loki/loki-config.yaml
+# stack/loki/loki-config.yaml
 auth_enabled: true
 
 # Add to docker-compose.yml environment
@@ -170,7 +170,7 @@ services:
 
 **Memory-constrained environment:**
 ```yaml
-# loki/loki-config.yaml
+# stack/loki/loki-config.yaml
 limits_config:
   max_streams_per_user: 1000      # Default: 10000
   max_entries_limit_per_query: 1000  # Default: 5000
@@ -182,7 +182,7 @@ ingester:
 
 **High-performance environment:**
 ```yaml
-# tempo/tempo.yaml
+# stack/tempo/tempo.yaml
 ingester:
   max_block_bytes: 209715200     # 200MB (default: 100MB)
   max_block_duration: 30m        # Default: 10m
@@ -198,7 +198,7 @@ query_frontend:
 
 **Alloy with TLS:**
 ```alloy
-# alloy/config.alloy
+# stack/alloy/config.alloy
 otelcol.receiver.otlp "default" {
   grpc {
     endpoint = "0.0.0.0:4317"
@@ -212,7 +212,7 @@ otelcol.receiver.otlp "default" {
 
 **Prometheus with basic auth:**
 ```yaml
-# prometheus/prometheus.yml
+# stack/prometheus/prometheus.yml
 scrape_configs:
   - job_name: "secure-app"
     static_configs:
@@ -226,7 +226,7 @@ scrape_configs:
 
 **Add custom labels in Alloy:**
 ```alloy
-# alloy/config.alloy
+# stack/alloy/config.alloy
 loki.relabel "add_labels" {
   forward_to = [loki.write.default.receiver]
   
@@ -244,7 +244,7 @@ loki.relabel "add_labels" {
 
 **Prometheus relabeling:**
 ```yaml
-# prometheus/prometheus.yml
+# stack/prometheus/prometheus.yml
 scrape_configs:
   - job_name: "kubernetes-pods"
     relabel_configs:
@@ -263,16 +263,16 @@ Before applying changes, validate your configuration:
 docker-compose config
 
 # Validate Alloy
-docker run --rm -v $(pwd)/alloy:/etc/alloy grafana/alloy:latest fmt /etc/alloy/config.alloy
+docker run --rm -v $(pwd)/alloy:/etc/alloy grafana/alloy:latest fmt /etc/stack/alloy/config.alloy
 
 # Validate Prometheus
-docker run --rm -v $(pwd)/prometheus:/etc/prometheus prom/prometheus:latest promtool check config /etc/prometheus/prometheus.yml
+docker run --rm -v $(pwd)/prometheus:/etc/prometheus prom/prometheus:latest promtool check config /etc/stack/prometheus/prometheus.yml
 
 # Check Loki config
-docker run --rm -v $(pwd)/loki:/etc/loki grafana/loki:latest -config.file=/etc/loki/loki-config.yaml -verify-config
+docker run --rm -v $(pwd)/loki:/etc/loki grafana/loki:latest -config.file=/etc/stack/loki/loki-config.yaml -verify-config
 
 # Check Tempo config
-docker run --rm -v $(pwd)/tempo:/etc/tempo grafana/tempo:latest -config.file=/etc/tempo/tempo.yaml -verify-config
+docker run --rm -v $(pwd)/tempo:/etc/tempo grafana/tempo:latest -config.file=/etc/stack/tempo/tempo.yaml -verify-config
 ```
 
 ## 📊 Resource Sizing Guidelines

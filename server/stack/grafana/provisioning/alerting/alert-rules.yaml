@@ -1,0 +1,354 @@
+# Grafana Alerting - Alert Rules for Error Logs
+# These rules monitor Loki for error patterns and trigger Slack notifications
+
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: application_errors
+    folder: Application Alerts
+    interval: 1m
+    rules:
+      # High Error Rate Alert
+      - uid: high_error_rate
+        title: High Error Rate Detected
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: P8E80F9AEF21F6940  # Loki datasource UID
+            model:
+              expr: sum(rate({service_name=~".+"} | json | severity="ERROR" [5m])) by (service_name, service_namespace)
+              queryType: range
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params:
+                      - 5  # Alert if more than 5 errors per second
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  type: query
+              refId: C
+        noDataState: OK
+        execErrState: Alerting
+        for: 2m
+        annotations:
+          description: 'Service {{ $labels.service_name }} in namespace {{ $labels.service_namespace }} is experiencing high error rate: {{ $values.B }} errors/sec'
+          summary: 'High error rate detected in {{ $labels.service_name }}'
+          runbook_url: 'https://your-runbook-url.com/high-error-rate'
+        labels:
+          severity: warning
+          team: backend
+
+      # Critical Error Pattern Alert
+      - uid: critical_error_pattern
+        title: Critical Error Pattern Detected
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: P8E80F9AEF21F6940
+            model:
+              expr: |
+                sum(count_over_time({service_name=~".+"} | json | body =~ "(?i)(exception|error|fatal|critical|panic|out of memory|database.*down|connection.*refused)" [5m])) by (service_name, service_namespace)
+              queryType: range
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params:
+                      - 10  # Alert if more than 10 critical errors in 5 minutes
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  type: query
+              refId: C
+        noDataState: OK
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          description: 'Critical error pattern detected in {{ $labels.service_name }}: {{ $values.B }} occurrences in last 5 minutes'
+          summary: 'Critical errors found in {{ $labels.service_name }}'
+          runbook_url: 'https://your-runbook-url.com/critical-errors'
+        labels:
+          severity: critical
+          team: backend
+
+      # Database Error Alert
+      - uid: database_errors
+        title: Database Connection Errors
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: P8E80F9AEF21F6940
+            model:
+              expr: |
+                sum(count_over_time({service_name=~".+"} | json | body =~ "(?i)(database.*error|connection.*timeout|sql.*exception|deadlock|lock.*timeout)" [5m])) by (service_name)
+              queryType: range
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params:
+                      - 5
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  type: query
+              refId: C
+        noDataState: OK
+        execErrState: Alerting
+        for: 2m
+        annotations:
+          description: 'Database errors detected in {{ $labels.service_name }}: {{ $values.B }} errors in last 5 minutes'
+          summary: 'Database connectivity issues in {{ $labels.service_name }}'
+          runbook_url: 'https://your-runbook-url.com/database-errors'
+        labels:
+          severity: critical
+          team: database
+
+      # Application Startup Failures
+      - uid: startup_failures
+        title: Application Startup Failures
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: P8E80F9AEF21F6940
+            model:
+              expr: |
+                sum(count_over_time({service_name=~".+"} | json | body =~ "(?i)(failed to start|startup.*failed|initialization.*error|bootstrap.*error)" [10m])) by (service_name)
+              queryType: range
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  type: query
+              refId: C
+        noDataState: OK
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          description: 'Application {{ $labels.service_name }} failed to start: {{ $values.B }} startup failures detected'
+          summary: 'Startup failure in {{ $labels.service_name }}'
+          runbook_url: 'https://your-runbook-url.com/startup-failures'
+        labels:
+          severity: critical
+          team: devops
+
+  - orgId: 1
+    name: log_volume_alerts
+    folder: Application Alerts
+    interval: 2m
+    rules:
+      # Sudden Log Volume Spike
+      - uid: log_volume_spike
+        title: Sudden Log Volume Spike
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: P8E80F9AEF21F6940
+            model:
+              expr: sum(rate({service_name=~".+"} [5m])) by (service_name)
+              queryType: range
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params:
+                      - 100  # Alert if more than 100 logs/sec
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  type: query
+              refId: C
+        noDataState: OK
+        execErrState: OK
+        for: 3m
+        annotations:
+          description: 'Service {{ $labels.service_name }} is generating {{ $values.B }} logs/sec (normal < 100/sec)'
+          summary: 'Unusual log volume spike in {{ $labels.service_name }}'
+          runbook_url: 'https://your-runbook-url.com/log-volume'
+        labels:
+          severity: warning
+          team: backend
+
+  - orgId: 1
+    name: performance_alerts
+    folder: Application Alerts
+    interval: 1m
+    rules:
+      # Slow Response Time (from logs)
+      - uid: slow_response_detected
+        title: Slow Response Times Detected
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: P8E80F9AEF21F6940
+            model:
+              expr: |
+                sum(count_over_time({service_name=~".+"} | json | body =~ "(?i)(slow.*query|timeout|took.*[5-9][0-9]{3,}ms|response.*time.*high)" [5m])) by (service_name)
+              queryType: range
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params:
+                      - 10
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  type: query
+              refId: C
+        noDataState: OK
+        execErrState: OK
+        for: 2m
+        annotations:
+          description: 'Slow response times detected in {{ $labels.service_name }}: {{ $values.B }} slow requests in 5 minutes'
+          summary: 'Performance degradation in {{ $labels.service_name }}'
+          runbook_url: 'https://your-runbook-url.com/slow-responses'
+        labels:
+          severity: warning
+          team: backend

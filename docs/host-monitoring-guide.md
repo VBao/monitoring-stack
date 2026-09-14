@@ -76,7 +76,7 @@ The host monitoring solution consists of several specialized components:
 - Web server logs (nginx/apache)
 
 **Port**: 9080
-**Configuration**: `promtail/promtail-config.yaml`
+**Configuration**: `stack/promtail/promtail-config.yaml`
 
 ### 3. cAdvisor
 **Purpose**: Monitors container resource usage
@@ -148,7 +148,7 @@ command:
 
 ### Promtail Configuration
 
-Edit `promtail/promtail-config.yaml` to customize log collection:
+Edit `stack/promtail/promtail-config.yaml` to customize log collection:
 
 ```yaml
 scrape_configs:
@@ -189,7 +189,7 @@ command:
 
 ### Host System Monitoring Dashboard
 
-Located at: `grafana/dashboards/host-monitoring.json`
+Located at: `stack/grafana/dashboards/host-monitoring.json`
 
 **Panels**:
 1. **CPU Usage** - Gauge showing current CPU usage
@@ -265,7 +265,7 @@ sum by (name) (rate(container_cpu_usage_seconds_total{image!=""}[5m]) * 100)
 
 ### Example Alert Rules
 
-Add to `prometheus/prometheus.yml`:
+Add to `stack/prometheus/prometheus.yml`:
 
 ```yaml
 groups:
@@ -385,7 +385,7 @@ Typical resource consumption:
 
 Configured retention periods:
 - **Prometheus**: 7 days (configured in `docker-compose.yml`)
-- **Loki**: 30 days (configured in `loki/loki-config.yaml`)
+- **Loki**: 30 days (configured in `stack/loki/loki-config.yaml`)
 
 ### Optimization Tips
 

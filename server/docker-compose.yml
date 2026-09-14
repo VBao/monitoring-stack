@@ -1,0 +1,148 @@
+# Keep the project name stable across the repo restructure: the running stack was
+# created as project "monitoring" from the old repo root. Without this, compose
+# derives the name from the directory (server/) and orphans the live containers.
+name: monitoring
+
+services:
+  alloy:
+    image: grafana/alloy:latest # v1.19.2 as of 2026-09-14
+    hostname: alloy
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+      - "12345:12345" # Alloy UI
+      - "9999:9999" # Prometheus metrics from OTEL
+    volumes:
+      - ./stack/alloy/config.alloy:/etc/alloy/config.alloy
+      - /var/run/docker.sock:/var/run/docker.sock:ro # For service discovery
+    command:
+      [
+        "run",
+        "--server.http.listen-addr=0.0.0.0:12345",
+        "/etc/alloy/config.alloy",
+      ]
+    networks:
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:latest # v3.14.0 as of 2026-09-14
+    hostname: prometheus
+    volumes:
+      - ./stack/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/etc/prometheus
+    ports:
+      - "9090:9090"
+    # command: [ "--config.file=/etc/prometheus/prometheus.yml" ]
+    # command: [ "--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--web.console.libraries=/etc/prometheus/console_libraries", "--web.console.templates=/etc/prometheus/consoles", "--web.enable-lifecycle" ]
+    # depends_on:
+    #   - init_prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.enable-lifecycle"
+      - "--web.enable-admin-api"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-remote-write-receiver"
+      # Alloy and the Tempo metrics generator both send exemplars, and the Grafana
+      # Prometheus datasource maps them to Tempo; without this they are discarded.
+      - "--enable-feature=exemplar-storage"
+      - "--storage.tsdb.min-block-duration=5m"
+      - "--storage.tsdb.max-block-duration=2h"
+    networks:
+      - monitoring
+
+  tempo:
+    image: grafana/tempo:2.10.8 # newest release compatible with this config; 3.x replaces the ingester with a Kafka-backed live-store/block-builder
+    hostname: tempo
+    volumes:
+      - ./stack/tempo/tempo.yaml:/etc/tempo.yaml
+      - tempo-data:/var/tempo
+    command: ["-config.file=/etc/tempo.yaml", "-target=all"]
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+          cpus: "0.2"
+    networks:
+      - monitoring
+
+  loki:
+    image: grafana/loki:latest # 3.7.7 as of 2026-09-14
+    hostname: loki
+    ports:
+      - "3100:3100"  # HTTP API (query) — needed by scripts/check-telemetry-invariants.sh
+    volumes:
+      - ./stack/loki/loki-config.yaml:/etc/loki/local-config.yaml
+      - loki-data:/loki
+    entrypoint:
+      - /usr/bin/loki
+      - -config.file=/etc/loki/local-config.yaml
+      - -config.expand-env=true
+    networks:
+      - monitoring
+
+  pyroscope:
+    image: grafana/pyroscope:latest # 2.3.1 as of 2026-09-14
+    hostname: pyroscope
+    ports:
+      - "4040:4040"
+    volumes:
+      - pyroscope-data:/data
+    environment:
+      - PYROSCOPE_LOG_LEVEL=info
+    command:
+      - "-target=all"
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest # 13.2.1 as of 2026-09-14
+    hostname: grafana
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_METRICS_ENABLED=true # Enable Grafana metrics
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor,traceQLMetrics # Enable TraceQL editor and metrics
+      # Alerting configuration
+      - GF_ALERTING_ENABLED=true
+      - GF_UNIFIED_ALERTING_ENABLED=true
+      - GF_ALERTING_EXECUTE_ALERTS=true
+      # Slack webhook URLs (set these in .env file)
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - SLACK_WEBHOOK_URL_CRITICAL=${SLACK_WEBHOOK_URL_CRITICAL:-}
+    volumes:
+      - ./stack/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:rw
+      - ./stack/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:rw
+      - ./stack/grafana/dashboards:/var/lib/grafana/dashboards:rw
+      - ./stack/grafana/dashboard.yaml:/etc/grafana/provisioning/dashboards/main.yaml
+      - grafana-storage:/var/lib/grafana
+    labels:
+      - "monitoring.scrape=true"
+      - "monitoring.port=3000"
+      - "monitoring.path=/metrics"
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    networks:
+      - monitoring
+
+volumes:
+  grafana-storage:
+  tempo-data:
+  loki-data:
+  prometheus-data:
+  pyroscope-data:
+
+networks:
+  monitoring:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.1.2.0/24

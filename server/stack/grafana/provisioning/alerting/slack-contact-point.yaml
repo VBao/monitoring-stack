@@ -1,0 +1,7 @@
+# Slack contact points are NOT auto-provisioned to prevent startup errors.
+# To enable Slack alerting, run:  setup/setup-slack-alerts.sh (Linux/macOS)
+#                                  setup\setup-slack-alerts.bat (Windows)
+# Or follow the manual guide:     quick-start/SLACK-ALERTS-README.md
+
+apiVersion: 1
+contactPoints: []

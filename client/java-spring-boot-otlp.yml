@@ -1,0 +1,232 @@
+# ========================================
+# Java Spring Boot - OTLP Configuration
+# ========================================
+# Add this to your application.yml or application.properties
+
+# ========================================
+# Option 1: application.yml (YAML format)
+# ========================================
+
+spring:
+  application:
+    name: ${SERVICE_NAME:my-service}  # Your service name
+
+management:
+  # OpenTelemetry configuration
+  otlp:
+    # Metrics export
+    metrics:
+      export:
+        enabled: true
+        url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://monitoring-server:4318}/v1/metrics
+        step: 10s
+
+    # Tracing export
+    tracing:
+      export:
+        enabled: true
+        endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://monitoring-server:4317}
+
+  # Expose endpoints
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+# Logging configuration
+logging:
+  pattern:
+    # JSON format for better parsing
+    console: '{"timestamp":"%d{yyyy-MM-dd HH:mm:ss.SSS}","level":"%level","thread":"%thread","logger":"%logger{36}","message":"%msg","trace_id":"%X{trace_id}","span_id":"%X{span_id}"}%n'
+  level:
+    root: INFO
+    com.yourpackage: DEBUG
+
+# ========================================
+# Option 2: application.properties
+# ========================================
+
+# Service name
+# spring.application.name=my-service
+
+# OTLP Metrics
+# management.otlp.metrics.export.enabled=true
+# management.otlp.metrics.export.url=http://monitoring-server:4318/v1/metrics
+# management.otlp.metrics.export.step=10s
+
+# OTLP Tracing
+# management.otlp.tracing.export.enabled=true
+# management.otlp.tracing.export.endpoint=http://monitoring-server:4317
+
+# Logging
+# logging.level.root=INFO
+# logging.pattern.console={"timestamp":"%d{yyyy-MM-dd HH:mm:ss}","level":"%level","message":"%msg","trace_id":"%X{trace_id}"}%n
+
+# ========================================
+# Dependencies Required (pom.xml)
+# ========================================
+
+# Add these to your pom.xml:
+#
+# <dependency>
+#     <groupId>io.opentelemetry</groupId>
+#     <artifactId>opentelemetry-api</artifactId>
+# </dependency>
+# <dependency>
+#     <groupId>io.opentelemetry.instrumentation</groupId>
+#     <artifactId>opentelemetry-spring-boot-starter</artifactId>
+#     <version>2.16.0-alpha</version>
+# </dependency>
+# <dependency>
+#     <groupId>io.opentelemetry</groupId>
+#     <artifactId>opentelemetry-exporter-otlp</artifactId>
+# </dependency>
+
+# ========================================
+# Environment Variables (Alternative)
+# ========================================
+
+# Set these in your deployment environment:
+#
+# export OTEL_SERVICE_NAME="hrms-backend-uat"
+# export OTEL_SERVICE_NAMESPACE="hrms"
+# export OTEL_EXPORTER_OTLP_ENDPOINT="http://monitoring-server:4318"
+# export OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"
+# export OTEL_RESOURCE_ATTRIBUTES="deployment.environment=uat,service.version=1.0.0"
+# export OTEL_LOGS_EXPORTER="otlp"
+# export OTEL_METRICS_EXPORTER="otlp"
+# export OTEL_TRACES_EXPORTER="otlp"
+
+# ========================================
+# Docker Compose Example
+# ========================================
+
+# Add to your docker-compose.yml:
+#
+# services:
+#   your-app:
+#     image: your-app:latest
+#     environment:
+#       - OTEL_SERVICE_NAME=hrms-backend-uat
+#       - OTEL_SERVICE_NAMESPACE=hrms
+#       - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318
+#       - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=uat
+#       - SPRING_PROFILES_ACTIVE=production
+#     networks:
+#       - monitoring  # Same network as Alloy
+
+# ========================================
+# Kubernetes Example
+# ========================================
+
+# Add to your deployment.yaml:
+#
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: your-app
+# spec:
+#   template:
+#     spec:
+#       containers:
+#       - name: app
+#         image: your-app:latest
+#         env:
+#         - name: OTEL_SERVICE_NAME
+#           value: "hrms-backend-uat"
+#         - name: OTEL_SERVICE_NAMESPACE
+#           value: "hrms"
+#         - name: OTEL_EXPORTER_OTLP_ENDPOINT
+#           value: "http://alloy.monitoring:4318"
+#         - name: OTEL_RESOURCE_ATTRIBUTES
+#           value: "deployment.environment=uat,k8s.pod.name=$(POD_NAME)"
+
+# ========================================
+# Code Example (Optional - Auto-instrumentation preferred)
+# ========================================
+
+# If you need manual instrumentation:
+#
+# import io.opentelemetry.api.GlobalOpenTelemetry;
+# import io.opentelemetry.api.trace.Span;
+# import io.opentelemetry.api.trace.Tracer;
+#
+# @Service
+# public class MyService {
+#     private static final Tracer tracer =
+#         GlobalOpenTelemetry.getTracer("my-service");
+#
+#     public void doSomething() {
+#         Span span = tracer.spanBuilder("doSomething").startSpan();
+#         try {
+#             // Your code here
+#             log.info("Processing request");
+#         } catch (Exception e) {
+#             span.recordException(e);
+#             log.error("Error occurred", e);
+#             throw e;
+#         } finally {
+#             span.end();
+#         }
+#     }
+# }
+
+# ========================================
+# Testing Configuration
+# ========================================
+
+# 1. Start your application
+# 2. Check logs for OTLP export messages
+# 3. Verify connection:
+#
+#    curl http://monitoring-server:4318/v1/logs -v
+#
+# 4. Generate test log:
+#
+#    curl http://localhost:8080/actuator/loggers/com.yourpackage \
+#      -X POST \
+#      -H 'Content-Type: application/json' \
+#      -d '{"configuredLevel":"DEBUG"}'
+#
+# 5. Check Grafana:
+#    - Open: http://monitoring-server:3002
+#    - Explore → Loki
+#    - Query: {service_name="my-service"}
+
+# ========================================
+# Troubleshooting
+# ========================================
+
+# Enable OTLP debug logging:
+# logging.level.io.opentelemetry=DEBUG
+# logging.level.io.micrometer=DEBUG
+
+# Check if OTLP exporter is working:
+# Look for logs like:
+# - "Exporting to OTLP endpoint..."
+# - "OTLP export completed successfully"
+
+# If connection fails:
+# - Verify monitoring-server hostname resolves
+# - Check network connectivity: telnet monitoring-server 4318
+# - Verify Alloy is running: docker ps | grep alloy
+# - Check firewall rules
+
+# ========================================
+# Performance Tuning
+# ========================================
+
+# Batch size and intervals:
+# management.otlp.metrics.export.batch-size=512
+# management.otlp.metrics.export.step=10s
+
+# Connection timeout:
+# management.otlp.metrics.export.connect-timeout=10s
+# management.otlp.metrics.export.read-timeout=30s
+
+# Queue size (for buffering):
+# otel.bsp.max.queue.size=2048
+# otel.bsp.max.export.batch.size=512
+# otel.bsp.schedule.delay=5000
+
+# ========================================

@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose:*)",
+      "Bash(docker-compose:*)",
+      "Bash(docker ps:*)",
+      "WebSearch",
+      "WebFetch(domain:grafana.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:community.grafana.com)",
+      "Bash(docker pull:*)",
+      "Bash(curl:*)",
+      "Bash(docker run:*)",
+      "Bash(docker volume rm:*)",
+      "Bash(python3 -c \"import urllib.parse; print\\(urllib.parse.unquote\\(''{nestedSetParent<0 && true&& duration > }''\\)\\)\")",
+      "Bash(echo \"{nestedSetParent<0 && true&& duration > }\")"
+    ]
+  }
+}

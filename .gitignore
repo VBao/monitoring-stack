@@ -1,2 +1,30 @@
 /data
 .vscode/settings.json
+
+# Archive and temporary files
+.archive/
+*.tmp
+*.bak
+*.bak.*
+*.backup
+*~
+.structure
+
+# Environment files (contain secrets)
+.env
+server/.env
+client/.env
+
+# Old structure (backwards compatibility - can be removed after migration)
+/configs/
+/setup/
+/scripts/
+/stack/
+/docker-compose.yml
+/docker-compose.host-monitoring.yml
+/.env.example
+.env.slack-only
+/start-host-monitoring.bat
+
+# Real credentials: reference copy of the HRMS prod profile. Never publish.
+server/monitor_spring_boot/application-prod.yaml

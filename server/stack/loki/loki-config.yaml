@@ -1,0 +1,123 @@
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  # Add gRPC for better performance
+  grpc_listen_port: 9095
+
+# Add common configuration for better integration
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: memberlist
+
+ingester:
+  lifecycler:
+    address: 0.0.0.0
+    ring:
+      kvstore:
+        store: memberlist
+      replication_factor: 1
+    final_sleep: 0s
+  chunk_idle_period: 5m
+  chunk_retain_period: 30s
+  # Increase for better performance
+  max_chunk_age: 1h
+  # max_transfer_retries: 0
+  wal:
+    enabled: true
+    dir: /loki/wal
+    replay_memory_ceiling: 512MB
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+storage_config:
+  tsdb_shipper:
+    active_index_directory: /loki/tsdb-shipper-active
+    cache_location: /loki/tsdb-shipper-cache
+    cache_ttl: 24h
+  filesystem:
+    directory: /loki/chunks
+
+# Improved limits for better performance
+limits_config:
+  max_streams_per_user: 10000
+  # max_line_size: 256000
+  max_entries_limit_per_query: 10000
+  max_global_streams_per_user: 5000
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  retention_period: 168h
+  # Add ingestion rate limits
+  ingestion_rate_mb: 10
+  ingestion_burst_size_mb: 20
+  per_stream_rate_limit: 3MB
+  per_stream_rate_limit_burst: 15MB
+
+  otlp_config:
+    resource_attributes:
+      ignore_defaults: true
+      attributes_config:
+        - action: index_label
+          attributes:
+            - service.name
+            - service.namespace
+            - deployment.environment
+
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  delete_request_store: filesystem
+
+query_range:
+  align_queries_with_step: true
+  max_retries: 5
+  cache_results: true
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 500
+        ttl: 24h
+        
+distributor:
+  ring:
+    kvstore:
+      store: memberlist
+
+frontend:
+  compress_responses: true
+  max_outstanding_per_tenant: 512
+  tail_proxy_url: http://localhost:3100
+
+querier:
+  max_concurrent: 10
+  # Add query timeout
+  # query_timeout: 300s
+
+# Add ruler for alerting (optional)
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /loki/rules
+  alertmanager_url: http://localhost:9093
+  ring:
+    kvstore:
+      store: memberlist

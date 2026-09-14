@@ -1,0 +1,41 @@
+# Grafana Alerting - Notification Policies Configuration
+# Copied by setup script after webhook URL is configured.
+# Defines routing rules for alerts to different Slack contact points.
+
+apiVersion: 1
+
+policies:
+  - orgId: 1
+    receiver: slack-errors
+    group_by: ['alertname', 'service_name', 'service_namespace']
+    group_wait: 10s
+    group_interval: 5m
+    repeat_interval: 3h
+    routes:
+      # Critical severity alerts go to critical Slack channel
+      - receiver: slack-critical
+        matchers:
+          - severity = critical
+        group_wait: 5s
+        group_interval: 2m
+        repeat_interval: 30m
+        continue: false
+
+      # Error/Warning severity alerts go to error Slack channel
+      - receiver: slack-errors
+        matchers:
+          - severity =~ "error|warning"
+        group_wait: 10s
+        group_interval: 5m
+        repeat_interval: 1h
+        continue: false
+
+      # All other alerts by service namespace
+      - receiver: slack-errors
+        matchers:
+          - service_namespace =~ "hrms|.*"
+        group_by: ['service_namespace', 'service_name', 'alertname']
+        group_wait: 10s
+        group_interval: 5m
+        repeat_interval: 2h
+        continue: false

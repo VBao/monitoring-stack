@@ -1,0 +1,16 @@
+apiVersion: 1
+datasources:
+- name: Loki
+  uid: P8E80F9AEF21F6940
+  type: loki
+  url: http://loki:3100
+  access: proxy
+  editable: true
+  jsonData:
+    maxLines: 1000
+    liveEnabled: true
+    derivedFields:
+      - datasourceUid: tempo
+        matcherRegex: '"traceid"\s*:\s*"(\w+)"'
+        name: TraceID
+        url: '${__value.raw}'

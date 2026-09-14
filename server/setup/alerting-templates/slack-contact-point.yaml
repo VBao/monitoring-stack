@@ -1,0 +1,76 @@
+# Grafana Alerting - Slack Contact Point Configuration
+# Copied by setup script after webhook URL is configured.
+# Requires SLACK_WEBHOOK_URL and SLACK_WEBHOOK_URL_CRITICAL env vars in .env
+
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: slack-errors
+    receivers:
+      - uid: slack-errors
+        type: slack
+        settings:
+          url: ${SLACK_WEBHOOK_URL}
+          title: |
+            {{ if eq .Status "firing" }}ALERT: {{ .GroupLabels.alertname }}{{ else }}RESOLVED: {{ .GroupLabels.alertname }}{{ end }}
+          text: |
+            {{ range .Alerts }}
+            *Alert:* {{ .Labels.alertname }}
+            *Severity:* {{ .Labels.severity }}
+            *Service:* {{ .Labels.service_name | default "unknown" }}
+            *Namespace:* {{ .Labels.service_namespace | default "unknown" }}
+            *Status:* {{ .Status }}
+
+            *Description:* {{ .Annotations.description }}
+
+            {{ if .Annotations.log_message }}*Log Message:*
+            ```{{ .Annotations.log_message }}```
+            {{ end }}
+
+            {{ if .Annotations.trace_id }}*Trace ID:* `{{ .Annotations.trace_id }}`{{ end }}
+
+            *Dashboard:* <{{ .DashboardURL }}|View in Grafana>
+            *Time:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+            {{ end }}
+          username: Grafana Monitoring
+          icon_emoji: ':fire:'
+          mention_channel: 'here'
+        disableResolveMessage: false
+
+  - orgId: 1
+    name: slack-critical
+    receivers:
+      - uid: slack-critical
+        type: slack
+        settings:
+          url: ${SLACK_WEBHOOK_URL_CRITICAL}
+          title: |
+            CRITICAL ALERT: {{ .GroupLabels.alertname }}
+          text: |
+            {{ range .Alerts }}
+            *CRITICAL ALERT*
+
+            *Alert:* {{ .Labels.alertname }}
+            *Severity:* {{ .Labels.severity }}
+            *Service:* {{ .Labels.service_name | default "unknown" }}
+            *Environment:* {{ .Labels.deployment_environment_name | default "unknown" }}
+
+            *Description:* {{ .Annotations.description }}
+
+            {{ if .Annotations.log_message }}
+            *Error Message:*
+            ```{{ .Annotations.log_message }}```
+            {{ end }}
+
+            {{ if .Annotations.error_count }}*Error Count:* {{ .Annotations.error_count }}{{ end }}
+            {{ if .Annotations.trace_id }}*Trace ID:* `{{ .Annotations.trace_id }}`{{ end }}
+
+            *Dashboard:* <{{ .DashboardURL }}|View in Grafana>
+            *Runbook:* <{{ .Annotations.runbook_url }}|Troubleshooting Guide>
+            *Time:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+            {{ end }}
+          username: Grafana Critical Alerts
+          icon_emoji: ':rotating_light:'
+          mention_channel: 'channel'
+        disableResolveMessage: false
